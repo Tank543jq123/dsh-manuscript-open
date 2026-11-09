@@ -2,11 +2,14 @@
 
 ## v1.1.1 — 2026-11-09
 
-文档口径修正，不改代码：
+P0-1 隐私防线 + 文档口径修正：
 
-- 测试数字限定为 **Linux + @deepseek-ai/dsh-tools：24 份 / 836**；无 peer 为 **832/4**；明确 Windows 不支持（CI 不跑 Windows）。
+- **新增 `lib/redact.js`**：送模型与入册前确定性脱敏私钥/GitHub/OpenAI/AWS token/Bearer/密码赋值/私有 IP/邮箱/home 路径/SSH。默认开启，`DSH_MANUSCRIPT_REDACT=0` 才关闭。
+- **新增 T1 开关**：`DSH_MANUSCRIPT_T1=0` 完全禁用 T1；T0 不受影响。
+- `test-redact.mjs` 新增 10 项断言；test-all 现在 **25 份 / 846**。
+- 测试数字限定为 **Linux + @deepseek-ai/dsh-tools：25 份 / 846**；无 peer 为 **842/4**；明确 Windows 不支持（CI 不跑 Windows）。
 - 删除“五种入口/本地命令/HTTP”错误描述：书阁是 DSH host+client 插件，cli/http 属于 SuperAgent 编排层。
-- 增加**数据边界**：T1 会把 digest 送配置的 LLM；条目明文落盘；当前无脱敏/加密；敏感会话不要跑 T1。
+- 增加**数据边界**：T1 送模型前默认脱敏；条目仍明文落盘（无加密）；敏感会话不要跑 T1。
 - 更新实测数字为 160 会话 / 280 条目 / 98 已提炼；selfcheck 说明改为只读会话、建库落临时根。
 - 重新移除被加回的个人技术文档/内部截图引用；公开版不含内部工作区信息。
 
