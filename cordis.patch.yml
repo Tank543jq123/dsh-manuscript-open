@@ -1,0 +1,8 @@
+# dsh-manuscript 的 Cordis 补丁：向 profile 插入一行插件。
+#
+# profile 的 cordis.patch.yml 会按 id 寻址这一行，所以 id 必须稳定。
+# 对齐 dsh-plugin-codesys 的最小形态（3 行即可工作）。
+
+- insert:
+    - id: dsh-manuscript
+      name: dsh-manuscript

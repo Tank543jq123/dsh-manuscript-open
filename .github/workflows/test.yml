@@ -1,0 +1,68 @@
+name: test
+
+# 全量测试：24 份脚本、836 项断言，串行约 18 秒。
+#
+# 为什么必须串行：这些脚本会互相抢临时目录、抢端口，并行会假失败。
+# test-all.mjs 内部已经是串行循环，这里只需要一次调用。
+#
+# 为什么这对"可发布"重要：在此之前所有测试都是开发者在本机手动跑的，
+# Release 里"836 项通过"只是那一台机器的数字，不是每次提交的保证。
+# 有了这条，任何人改一行都能立刻知道测试还绿不绿。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # 允许手动触发，便于在改动 CI 本身时试跑
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: node ${{ matrix.node }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 只跑 Linux 与声明的最低 Node 版本。
+        # 为什么不加 Windows：项目从未在 Windows 上验证过（平台分支标注为"未验证方案"），
+        # 放进来只会是一条长期红着的 job，而不是有用的信号。等真机验过再加。
+        os: [ubuntu-latest]
+        node: ['22.19', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # 零依赖：不需要 npm install / pnpm install。
+      # 这是这个项目的硬约束（dependencies: {}），CI 也顺便验证它没被破坏。
+      - name: 确认零运行时依赖
+        run: |
+          node -e "
+            const p = require('./package.json');
+            const n = Object.keys(p.dependencies || {}).length;
+            if (n > 0) { console.error('运行时依赖应为空，实际 ' + n + ' 个'); process.exit(1); }
+            console.log('运行时依赖：0 ✓');
+          "
+
+      - name: 全量测试
+        run: node scripts/test-all.mjs
+
+      - name: 打包冒烟（确认发布件完整且不含隐私文件）
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack.txt
+          # data/ 里有会话片段（内网 IP、SSH 命令），绝不能进发布包
+          if grep -q 'data/' /tmp/pack.txt; then
+            echo "::error::发布包里出现了 data/ —— 隐私文件外泄"
+            exit 1
+          fi
+          # 核心文件必须在包里
+          for f in lib/index.js lib/client.js cordis.patch.yml; do
+            grep -q "$f" /tmp/pack.txt || { echo "::error::发布包缺少 $f"; exit 1; }
+          done
+          echo "打包冒烟通过 ✓"
