@@ -263,6 +263,7 @@ curl -X POST http://127.0.0.1:3080/dsh-superagent/inbox \
 | [`docs/安装与验收.md`](docs/安装与验收.md) | 可照抄的安装步骤与验收清单 |
 | [`docs/输出格式.md`](docs/输出格式.md) | 条目、目录、`library.json` 的字段口径 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 每个版本的变更与已知问题 |
+| [`README-技术文档.md`](README-技术文档.md) | 完整技术文档：架构、行为规约、API 契约、归册规则、设计系统 |
 
 ---
 
