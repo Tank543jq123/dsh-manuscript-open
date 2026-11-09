@@ -107,8 +107,12 @@ for (const file of list) {
   }
   const parsed = parseResultLine(out)
   const ms = Date.now() - started
-  const ok = code === 0 && parsed && parsed.fail === 0
-  rows.push({ file, ok, code, ms, parsed })
+  // 【2026-11-09】识别"整份跳过"：某些脚本依赖本机语料或宿主环境（如 selfcheck
+  // 需要 ~/.dsh/sessions），在没有这些的机器上会打印"跳过"并 exit 0。
+  // 那不是"通过"——把它算进通过数会虚抬总数。单独记 skippedSuite。
+  const skippedSuite = !parsed && /跳过：本机没有可扫描的会话/.test(String(out))
+  const ok = code === 0 && (skippedSuite || (parsed && parsed.fail === 0))
+  rows.push({ file, ok, code, ms, parsed, skippedSuite })
   if (!ok) {
     broken += 1
     // 失败时把脚本尾部打出来 —— 汇总行 + 失败明细都在最后几行
@@ -121,6 +125,10 @@ for (const file of list) {
         .join('\n')
     )
     if (failFast) break
+  } else if (rows[rows.length - 1].skippedSuite) {
+    // 整份跳过：依赖本机语料/宿主的脚本在没有它们的机器上不适用。
+    // 不打勾也不打叉 —— 它既没验证也没失败。
+    console.log(`○ ${file.padEnd(28)} 整份跳过（本机缺语料或宿主）`)
   } else {
     const p = parsed
     console.log(

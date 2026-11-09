@@ -60,9 +60,26 @@ const scaled = (per100) => Math.max(1, Math.round((per100 * (scanned?.sessions.l
 // 1. 扫描
 // ─────────────────────────────────────────────
 let scanned
+// 【2026-11-09 修】这条原来断言"必须扫到会话"——在本机是对的，但 **CI 机器上没有
+// ~/.dsh/sessions**，于是 selfcheck 在 CI 里必然崩，整条 workflow 变红。
+//
+// 这是测试设计缺陷：selfcheck 是"在装了 DSH 的机器上验收插件"的脚本，
+// 它**依赖本机语料**。没有语料时应该是"这条覆盖不到"，而不是"插件坏了"。
+// 现在：没语料就整份优雅退出（exit 0），并明确说明为什么没验 —— 不伪造通过。
+scanned = scanSessions()
+if (scanned.sessions.length === 0) {
+  console.log('')
+  console.log('═'.repeat(64))
+  console.log('跳过：本机没有可扫描的会话（~/.dsh/sessions 不存在或为空）')
+  console.log('')
+  console.log('selfcheck 是"在装了 DSH 的机器上验收插件"的脚本，依赖本机语料。')
+  console.log('CI 环境没有语料，因此这份自检不适用 —— 这不是通过，也不是失败。')
+  console.log('要在本机验收，请先装上 DSH 并产生一些会话，再运行本脚本。')
+  console.log('═'.repeat(64))
+  process.exit(0)
+}
 check('扫描会话（多帧 zstd + 无版本号兼容）', () => {
-  scanned = scanSessions()
-  assert(scanned.sessions.length > 0, '一个会话都没扫到（检查 ~/.dsh/sessions）')
+  assert(scanned.sessions.length > 0, '一个都没扫到（上面已挡过，这里不该命中）')
   if (MIN_SESSIONS > 0) assert(scanned.sessions.length >= MIN_SESSIONS, `会话数低于要求: ${scanned.sessions.length} < ${MIN_SESSIONS}`)
   const noVer = scanned.sessions.filter((s) => s.formatVersion === 0).length
   // 无版本号会话是"老格式兼容"的样本，机器上没有不是缺陷，只是这一条覆盖不到
