@@ -1,7 +1,15 @@
 // 端到端装配探针：用最小 mock ctx 真正跑一遍 apply()，断言新 section 被注册。
 // 目的：证明「代码改了」≠「跑起来了」。这里要看到 systemPrompt.section() 真被调用。
 
-import { apply, TOOL_PACKS } from '../lib/index.js';
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+const _reaDir = mkdtempSync(join(tmpdir(), 'book-rea-'))
+const _reaScript = join(_reaDir, 'rea.mjs')
+writeFileSync(_reaScript, '')
+process.env.REA_NODE = process.execPath
+process.env.REA_SCRIPT = _reaScript
+const { apply, TOOL_PACKS } = await import('../lib/index.js');
 
 // 关键：getDefineTool() 的第 ② 条解析路径依赖 process.argv[1] 形如
 // .../@deepseek-ai/dsh/lib/bin.js。测试脚本的 argv[1] 是测试文件本身，

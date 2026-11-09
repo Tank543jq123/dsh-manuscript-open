@@ -172,7 +172,7 @@ node scripts/selfcheck.mjs           # 23 项（只读会话；建库落临时�
 ### 一把跑完全部测试
 
 ```bash
-node scripts/test-all.mjs   # Linux + @deepseek-ai/dsh-tools：25 份 / 846；无 peer：842/4；Windows 不支持
+node scripts/test-all.mjs   # Linux + @deepseek-ai/dsh-tools：25 份 / 848；无 peer：844/4；Windows 不支持
 ```
 
 ---
@@ -213,7 +213,7 @@ GitHub / 飞书 / 微信 / 本地命令 / HTTP 是 **SuperAgent 编排层的入�
 | **入册条目** | **280 条** |
 | 册数 | 6 |
 | 无效条目 | **0** |
-| 测试 | Linux + peer：25 份 / **846 项通过**；无 peer：842/4；Windows 不支持 |
+| 测试 | Linux + peer：25 份 / **848 项通过**；无 peer：844/4；Windows 不支持 |
 
 分册：DSH 插件开发 156 · 未分类收件箱 88 · 本地模型与推理环境 23 · AI 协作方法与踩坑 5 · 网页抓取与检索 5 · 硬件设计与器件选型 3。
 

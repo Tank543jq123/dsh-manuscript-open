@@ -1,6 +1,6 @@
 name: test
 
-# 全量测试：Linux + @deepseek-ai/dsh-tools 下 25 份脚本、846 项断言，串行约 18 秒；无 peer 842/4。Windows 不在支持范围，不加入 matrix。
+# 全量测试：Linux + @deepseek-ai/dsh-tools 下 25 份脚本、848 项断言，串行约 18 秒；无 peer 844/4。Windows 不在支持范围，不加入 matrix。
 #
 # 为什么必须串行：这些脚本会互相抢临时目录、抢端口，并行会假失败。
 # test-all.mjs 内部已经是串行循环，这里只需要一次调用。

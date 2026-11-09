@@ -1,4 +1,13 @@
-import {
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+// 让 rea 在这台测试机上“已安装”，避免测试依赖开发机路径；未安装的过滤由 test-toolpacks 覆盖。
+const _reaDir = mkdtempSync(join(tmpdir(), 'book-rea-'))
+const _reaScript = join(_reaDir, 'rea.mjs')
+writeFileSync(_reaScript, '')
+process.env.REA_NODE = process.execPath
+process.env.REA_SCRIPT = _reaScript
+const {
   resolvePack,
   buildMountConfig,
   diffMountedTools,
@@ -9,7 +18,7 @@ import {
   mountPack,
   unmountPack,
   TOOL_PACKS,
-} from '../lib/index.js';
+} = await import('../lib/index.js');
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log(`✓ ${n}${d ? '  ' + d : ''}`)) : (fail++, console.log(`✗ ${n}${d ? '  ' + d : ''}`)); };
