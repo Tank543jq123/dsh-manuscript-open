@@ -1,7 +1,8 @@
 // 端到端装配探针：用最小 mock ctx 真正跑一遍 apply()，断言新 section 被注册。
 // 目的：证明「代码改了」≠「跑起来了」。这里要看到 systemPrompt.section() 真被调用。
 
-import { apply, TOOL_PACKS } from '../lib/index.js';
+import { apply, TOOL_PACKS, availablePacks } from '../lib/index.js';
+import { existsSync } from 'node:fs';
 
 // 关键：getDefineTool() 的第 ② 条解析路径依赖 process.argv[1] 形如
 // .../@deepseek-ai/dsh/lib/bin.js。测试脚本的 argv[1] 是测试文件本身，
@@ -72,21 +73,37 @@ for (const s of sections) {
 
 const names = sections.map((s) => s.name);
 ok('规约 section 已注册', names.includes('plugin:dsh-manuscript/contract'));
-ok('工具包 section 已注册', names.includes('plugin:dsh-manuscript/toolpacks'));
 ok('目录 section 已注册', names.includes('plugin:dsh-manuscript'));
 
-// 顺序检查：规约(140) < 工具包(145) < 目录(150)
-const byName = Object.fromEntries(sections.map((s) => [s.name, s.order]));
-ok('顺序 规约<工具包<目录',
-  byName['plugin:dsh-manuscript/contract'] < byName['plugin:dsh-manuscript/toolpacks'] &&
-  byName['plugin:dsh-manuscript/toolpacks'] < byName['plugin:dsh-manuscript'],
-  `${byName['plugin:dsh-manuscript/contract']} < ${byName['plugin:dsh-manuscript/toolpacks']} < ${byName['plugin:dsh-manuscript']}`);
+// 【2026-11-09 语义变更】工具包 section 现在是**条件注册**的：
+// 本机一个可挂的包都没有时不注册（否则会渲染一段"以下能力存在于本机"的谎言）。
+// 所以断言改成双向：本机有可用包 → 必须注册且顺序正确；没有 → 必须不注册。
+const hasPacks = availablePacks().length > 0
+const byName = Object.fromEntries(sections.map((s) => [s.name, s.order]))
+if (hasPacks) {
+  ok('工具包 section 已注册（本机有可用包）', names.includes('plugin:dsh-manuscript/toolpacks'))
+  ok('顺序 规约<工具包<目录',
+    byName['plugin:dsh-manuscript/contract'] < byName['plugin:dsh-manuscript/toolpacks'] &&
+    byName['plugin:dsh-manuscript/toolpacks'] < byName['plugin:dsh-manuscript'],
+    `${byName['plugin:dsh-manuscript/contract']} < ${byName['plugin:dsh-manuscript/toolpacks']} < ${byName['plugin:dsh-manuscript']}`)
+} else {
+  ok('工具包 section 不注册（本机无可用包，修复点）', !names.includes('plugin:dsh-manuscript/toolpacks'))
+  ok('顺序 规约<目录（无工具包段）',
+    byName['plugin:dsh-manuscript/contract'] < byName['plugin:dsh-manuscript'],
+    `${byName['plugin:dsh-manuscript/contract']} < ${byName['plugin:dsh-manuscript']}`)
+}
 
 // 工具包 section 内容
 const tp = sections.find((s) => s.name === 'plugin:dsh-manuscript/toolpacks');
 const tpText = typeof tp?.text === 'function' ? tp.text() : tp?.text ?? '';
-ok('工具包 section 含 REA', tpText.includes('REA'));
-ok('工具包 section 足够小', Buffer.byteLength(tpText, 'utf8') < 2048, `${Buffer.byteLength(tpText, 'utf8')} B`);
+if (hasPacks) {
+  ok('工具包 section 非空', tpText.length > 0);
+  ok('工具包 section 足够小', Buffer.byteLength(tpText, 'utf8') < 2048, `${Buffer.byteLength(tpText, 'utf8')} B`);
+} else {
+  // 没有段时 tpText 应为空串 —— 这也是修复的一部分
+  ok('无可用包时 section 文本为空', tpText === '');
+  ok('无可用包时不渲染"本机存在"的假声明', !tpText.includes('存在于本机'));
+}
 
 // 原有 5 个工具仍在
 console.log('\n=== 注册的工具 ===');

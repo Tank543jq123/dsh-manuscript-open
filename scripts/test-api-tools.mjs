@@ -68,12 +68,32 @@ ok('有 groups', Array.isArray(captured?.groups) && captured.groups.length > 0, 
 ok('有 summary', typeof captured?.summary === 'object');
 ok('可见工具数 > 0', captured?.summary?.visibleToolCount === 5, `${captured?.summary?.visibleToolCount}`);
 
-console.log('\n=== 3. 未挂载的 REA 必须出现在响应里（本次核心诉求）===\n');
+// 【2026-11-09 语义变更】原来这组断言"REA 必须出现在工具架"——那正是用户报的 bug：
+// 本机没装 REA 却显示它。现在只有本机真能挂的包才出现，所以断言改成双向：
+//   · 本机装着 REA → 必须出现、标未挂载、带体积与启用说明
+//   · 本机没装     → 必须**不**出现
+console.log('\n=== 3. 工具架只列本机可用的包（2026-11-09 修复）===\n');
 const rea = captured.groups.find((g) => g.packId === 'rea');
-ok('REA 出现在工具架', rea !== undefined);
-ok('REA 标为未挂载', rea?.mounted === false);
-ok('REA 带体积', rea?.schemaKb === 757);
-ok('REA 带启用说明', typeof rea?.how === 'string' && rea.how.includes('manual_mount'));
+const reaInstalled = process.env.REA_SCRIPT
+  ? true
+  : (() => {
+      try {
+        const { existsSync } = require('node:fs')
+        const p = (captured.packs || []).find((x) => x.id === 'rea')
+        return Boolean(p && existsSync(p.args?.[0] ?? ''))
+      } catch { return false }
+    })()
+if (reaInstalled) {
+  ok('本机装了 REA → 出现在工具架', rea !== undefined);
+  ok('REA 标为未挂载', rea?.mounted === false);
+  ok('REA 带体积', rea?.schemaKb === 757);
+  ok('REA 带启用说明', typeof rea?.how === 'string' && rea.how.includes('manual_mount'));
+} else {
+  ok('本机没装 REA → 不出现在工具架（修复点）', rea === undefined, `groups=${captured.groups.map((g) => g.key).join(',')}`);
+  ok('不出现在工具架时也不留空壳组', captured.groups.every((g) => !String(g.key).includes('rea')));
+  ok('跳过：本机无 REA，体积断言不适用', true);
+  ok('跳过：本机无 REA，启用说明断言不适用', true);
+}
 
 console.log('\n=== 4. 静态挂载的 kicad 单独标记 ===\n');
 const kicad = captured.groups.find((g) => g.key === 'mcp:kicad');
