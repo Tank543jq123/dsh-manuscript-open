@@ -1,5 +1,17 @@
 # 变更记录
 
+## v1.1.3 — 2026-11-10
+
+修复 issue #4：非作者机器上提炼必然失败（provider 硬编码 + 模型清单写死 + 失败原因被吞）。
+
+- provider/model 优先从宿主 `agentDefaultModel.currentSelection()` 取（`ctx.get` → `ctx.agentDefaultModel` → `ctx.root.get`），其次 profile YAML，最后 env/内置默认；`apply`、`/distill/plan`、`/distill/run` 三处都会解析。
+- 模型下拉改为宿主真实目录（`ctx.llm.listProviders()` / `listModels()`）；`/distill/plan` 返回 `currentProvider` / `catalogFromHost`；拿不到目录时保留静态清单。
+- `llm-stream` 对 `type:'error'` 块直接 throw；`runDistill` 返回 `failureDetails`，`/distill/run` 用 `failures[0].error.message` 回显真实失败原因和 provider。
+- 用户手动切换的模型有 pinned 保护，不会被后续 host 同步覆盖；`/distill/run` 在模型校验前先 sync/refresh。
+- 修正 test-mount 对已安装工具包提示文案的陈旧断言（与 ec964fd 的文案变更对齐）。
+- 验证：`scripts/test-all.mjs` **25 份 / 852 通过 / 0 失败**。
+- 未验证：没有在真实 Windows desktop + deepseek-account 宿主上跑；host 行为只按 DSH 0.2.1-rc.5 类型定义 + mock ctx 验证。
+
 ## v1.1.2 — 2026-11-10
 
 提炼模型跟随本机 DSH，不再写死 workbuddy：
