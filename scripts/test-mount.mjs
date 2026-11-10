@@ -29,16 +29,46 @@ const bad = resolvePack('nope');
 ok('未知 id 报错含可用列表', bad.reason.includes('rea') && bad.reason.includes('未知'));
 ok('空 id 被拒', !resolvePack('').ok);
 ok('undefined 被拒', !resolvePack(undefined).ok);
-const good = resolvePack('rea');
-ok('rea 通过', good.ok);
-ok('rea 带 serverName', good.pack?.serverName === 'rea');
-const padded = resolvePack('  rea  ');
-ok('前后空格被容忍', padded.ok && padded.pack.id === 'rea');
+// 【2026-11-09 重构】原先把 rea 当成"一定能挂的包"，可它依赖本机装了 REA。
+// 现在 resolvePack 会探测入口脚本是否存在 —— 换台机器就全红了。
+//
+// 这些用例测的是 **resolvePack / buildMountConfig 的纯逻辑**，不该依赖本机装了什么。
+// 所以用一个可控的假包：入口脚本指向当前 node 自身（一定存在）。
+const FAKE = {
+  id: 'fake',
+  label: '假工具包',
+  serverName: 'fake-server',
+  transport: 'stdio',
+  command: process.execPath,
+  args: [process.execPath, 'mcp'],
+  // env 用两个假名，测的是「buildMountConfig 会原样带上 env」这个行为，
+  // 不需要真的是 GHIDRA/JAVA（原来断言写死了那两个键，等于把实现细节当契约）
+  env: { GHIDRA_INSTALL_DIR: '/fake/ghidra', JAVA_HOME: '/fake/java' },
+  toolCallTimeoutMs: 900000,
+  reconnect: { enabled: true },
+}
+const fakePacks = [FAKE]
+const good = resolvePack('fake', fakePacks);
+ok('可控假包通过（入口脚本存在）', good.ok, good.ok ? '' : good.reason);
+ok('带 serverName', good.pack?.serverName === 'fake-server');
+const padded = resolvePack('  fake  ', fakePacks);
+ok('前后空格被容忍', padded.ok && padded.pack.id === 'fake');
+
+// 本机不可用的包必须被拒，并给出能照着做的原因（用户报的 bug：幽灵 REA）
+{
+  const ghost = { ...FAKE, id: 'ghost', args: ['/definitely/not/here-' + Date.now()] }
+  const r = resolvePack('ghost', [ghost])
+  ok('入口脚本不存在的包被拒', r.ok === false)
+  ok('拒绝原因含「本机不可用」', r.ok === false && r.reason.includes('本机不可用'), (r.reason || '').slice(0, 50))
+  ok('拒绝原因指出入口脚本缺失', r.ok === false && r.reason.includes('入口脚本不存在'))
+}
+// 未知 id 的提示里应带上**当前传入的**可用列表，不能假设本机有 rea
+ok('未知 id 报错含可用列表', resolvePack('nope', fakePacks).reason.includes('fake'))
 
 console.log('\n=== 2. buildMountConfig 关键字段 ===\n');
 const cfg = buildMountConfig(good.pack);
 ok('failOnStartupError 必须为 true', cfg.failOnStartupError === true, '（false 会让失败静默）');
-ok('serverName 正确', cfg.serverName === 'rea');
+ok('serverName 正确', cfg.serverName === 'fake-server');
 ok('transport 为 stdio', cfg.transport === 'stdio');
 ok('args 是数组且有 2 项', Array.isArray(cfg.args) && cfg.args.length === 2);
 ok('toolCallTimeoutMs 保留 900000', cfg.toolCallTimeoutMs === 900000);
@@ -125,24 +155,26 @@ ok('state 为空时安全', mountedPackIdsForScope(null, keyA).length === 0);
 console.log('\n=== 8. mountPack 守卫（不真挂载）===\n');
 const mkState = () => ({ byAgent: new Map(), byScope: new Map() });
 
+// 【2026-11-09】这组测的是**前置守卫**（无 agent / 无 ctx / 未知包 / 幂等），
+// 与"本机装没装 REA"无关。用假包（入口脚本存在）才能在任何机器上都测到守卫逻辑。
 // 8a: 无 agent
-const r1 = await mountPack({ state: mkState(), agent: null, packId: 'rea' });
+const r1 = await mountPack({ state: mkState(), agent: null, packId: 'fake', packs: fakePacks });
 ok('无 agent 时拒绝', !r1.ok);
 ok('拒绝理由提到泄漏', r1.reason.includes('泄漏'));
 
 // 8b: agent 无 ctx
-const r2 = await mountPack({ state: mkState(), agent: { id: 'a1' }, packId: 'rea' });
+const r2 = await mountPack({ state: mkState(), agent: { id: 'a1' }, packId: 'fake', packs: fakePacks });
 ok('agent 无 ctx 时拒绝', !r2.ok);
 
 // 8c: 未知包（在此之前不该触达 mcp-client 加载）
-const r3 = await mountPack({ state: mkState(), agent: { id: 'a1', ctx: {} }, packId: 'ghost' });
+const r3 = await mountPack({ state: mkState(), agent: { id: 'a1', ctx: {} }, packId: 'ghost', packs: fakePacks });
 ok('未知包时拒绝', !r3.ok);
 ok('未知包理由明确', r3.reason.includes('未知工具包'));
 
 // 8d: 幂等守卫 —— 预置一条已挂载记录
 const st2 = mkState();
-st2.byAgent.set('a1', new Map([['rea', { count: 5, fiber: {} }]]));
-const r4 = await mountPack({ state: st2, agent: { id: 'a1', ctx: {} }, packId: 'rea' });
+st2.byAgent.set('a1', new Map([['fake', { count: 5, fiber: {} }]]));
+const r4 = await mountPack({ state: st2, agent: { id: 'a1', ctx: {} }, packId: 'fake', packs: fakePacks });
 ok('重复挂载被拦', !r4.ok && r4.alreadyMounted === true);
 ok('重复挂载理由可执行', r4.reason.includes('manual_unmount'));
 
