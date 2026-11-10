@@ -1,5 +1,15 @@
 # 变更记录
 
+## v1.1.2 — 2026-11-10
+
+提炼模型跟随本机 DSH，不再写死 workbuddy：
+
+- 新增 `lib/model-config.js`：从宿主 profile 的 `cordis.patch.yml` 读取 `agent-default-model` 的 provider/model；profile 由 `DSH_PROFILE_DIR` / `DSH_PROFILE` / `--profile` 解析，默认 `web`。
+- `DISTILL_PROVIDER` / `DISTILL_MODEL` 由 const 改为 let，`apply()` 时 `syncDistillFromDsh()`；DSH 默认模型不在清单里会自动补一项「（DSH 默认）」；用户在 UI 手动切换的模型仍优先。
+- 同时包含：toolpack 探测式注册（没装工具包不再列进工具架）、`manual_distill` 的 commit 选项。
+- 验证：`node scripts/test-all.mjs` **25 份 / 859 项 / 19.3s，全部通过**。
+- 未验证：没有跑真实 LLM 提炼（会写库/花钱）；本机 DSH 默认恰好也是 workbuddy/deepseek，所以本机看不到行为差异。
+
 ## v1.1.1 — 2026-11-09
 
 P0-1 隐私防线 + 文档口径修正：
