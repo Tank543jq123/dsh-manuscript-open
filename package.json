@@ -1,6 +1,6 @@
 {
   "name": "dsh-manuscript",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "书阁 · 把已归档对话编译成有目录、可溯源的手册库。零向量、零外部服务。",
   "type": "module",
   "main": "lib/index.js",
