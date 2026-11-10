@@ -1,14 +1,14 @@
 # 变更记录
 
-## v1.1.2 — 2026-11-09
+## v1.1.2 — 2026-11-10
 
-修工具包可用性显示 bug：
+提炼模型跟随本机 DSH，不再写死 workbuddy：
 
-- **未安装的 rea 不再出现在工具架/系统提示词**：`TOOL_PACKS` 仍是静态定义，但 `availableToolPacks()` 用 `command` 与脚本路径存在性过滤；工具架、系统提示、`manual_mount` 的可用 id 都走过滤结果。
-- **`manual_mount('rea')` 在缺文件时直接报“未安装”**，不再尝试启动不存在的 server。
-- 测试改为模拟“本机已安装 rea”的临时路径；真实未安装场景由 `test-toolpacks` 的缺失路径断言覆盖。
-- test-all 25 份 / **848**；npm pack 25 文件 / 231.8 kB，无 data/。
-
+- 新增 `lib/model-config.js`：从宿主 profile 的 `cordis.patch.yml` 读取 `agent-default-model` 的 provider/model；profile 由 `DSH_PROFILE_DIR` / `DSH_PROFILE` / `--profile` 解析，默认 `web`。
+- `DISTILL_PROVIDER` / `DISTILL_MODEL` 由 const 改为 let，`apply()` 时 `syncDistillFromDsh()`；DSH 默认模型不在清单里会自动补一项「（DSH 默认）」；用户在 UI 手动切换的模型仍优先。
+- 同时包含：toolpack 探测式注册（没装工具包不再列进工具架）、`manual_distill` 的 commit 选项。
+- 验证：`node scripts/test-all.mjs` **25 份 / 859 项 / 19.3s，全部通过**。
+- 未验证：没有跑真实 LLM 提炼（会写库/花钱）；本机 DSH 默认恰好也是 workbuddy/deepseek，所以本机看不到行为差异。
 
 ## v1.1.1 — 2026-11-09
 
@@ -16,8 +16,8 @@ P0-1 隐私防线 + 文档口径修正：
 
 - **新增 `lib/redact.js`**：送模型与入册前确定性脱敏私钥/GitHub/OpenAI/AWS token/Bearer/密码赋值/私有 IP/邮箱/home 路径/SSH。默认开启，`DSH_MANUSCRIPT_REDACT=0` 才关闭。
 - **新增 T1 开关**：`DSH_MANUSCRIPT_T1=0` 完全禁用 T1；T0 不受影响。
-- `test-redact.mjs` 新增 10 项断言；test-all 现在 **25 份 / 848**。
-- 测试数字限定为 **Linux + @deepseek-ai/dsh-tools：25 份 / 848**；无 peer 为 **844/4**；明确 Windows 不支持（CI 不跑 Windows）。
+- `test-redact.mjs` 新增 10 项断言；test-all 现在 **25 份 / 846**。
+- 测试数字限定为 **Linux + @deepseek-ai/dsh-tools：25 份 / 846**；无 peer 为 **842/4**；明确 Windows 不支持（CI 不跑 Windows）。
 - 删除“五种入口/本地命令/HTTP”错误描述：书阁是 DSH host+client 插件，cli/http 属于 SuperAgent 编排层。
 - 增加**数据边界**：T1 送模型前默认脱敏；条目仍明文落盘（无加密）；敏感会话不要跑 T1。
 - 更新实测数字为 160 会话 / 280 条目 / 98 已提炼；selfcheck 说明改为只读会话、建库落临时根。
