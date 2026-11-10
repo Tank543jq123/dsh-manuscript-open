@@ -2,8 +2,11 @@
 
 > **把过去几百次 AI 对话，编译成一本有目录、能查阅、可溯源的手册。**
 >
-> 零向量、零外部服务、零 API key —— 目录、归册、检索、溯源全在本机完成。
-> LLM 提炼是可选的增强轨，不是前置依赖。
+> 零向量。**T0 确定性轨零外部服务、零 API key**；T1 提炼是可选增强，会把会话 digest 发到配置的 LLM。
+>
+> **数据边界（必读）**：T1 会把 digest（标题/项目/事件片段）送模型；送前默认脱敏（私钥/token/私有 IP/邮箱/home 路径/SSH），
+> 入册前同样脱敏；条目仍以**明文**存 `~/.dsh/dsh-manuscript`（**无加密**）。`DSH_MANUSCRIPT_REDACT=0` 可关闭脱敏，
+> `DSH_MANUSCRIPT_T1=0` 可完全禁用 T1。敏感会话仍建议不要跑 T1；公开版不附内部工作区截图。
 >
 > **公开版不含真实工作区截图**：截图会暴露内部项目名、工作区名与路径。下面用文字、ASCII 流程和 Mermaid 结构图说明。
 
@@ -163,13 +166,13 @@ ln -s /path/to/dsh-manuscript ~/.dsh/profiles/<profile>/node_modules/dsh-manuscr
 ```bash
 node scripts/test-toolpacks.mjs      # 13 项
 node scripts/test-distill-state.mjs  # 41 项
-node scripts/selfcheck.mjs           # 23 项（⚠️ 会写线上库）
+node scripts/selfcheck.mjs           # 23 项（只读会话；建库落临时根）
 ```
 
 ### 一把跑完全部测试
 
 ```bash
-node scripts/test-all.mjs   # 24 份脚本 / 836 项断言 / 约 18 秒
+node scripts/test-all.mjs   # Linux + @deepseek-ai/dsh-tools：25 份 / 848；无 peer：844/4；Windows 不支持
 ```
 
 ---
@@ -190,28 +193,13 @@ node scripts/test-all.mjs   # 24 份脚本 / 836 项断言 / 约 18 秒
 
 ---
 
-## 四种入口，不强制绑定 GitHub
+## 入口边界（必读）
 
-| 入口 | 适合 | 怎么用 |
-|:---|:---|:---|
-| **GitHub** | 团队协作、代码评审 | Issue/PR 里 @ 它 |
-| **飞书** | 群里派活 | 机器人在群里收消息 |
-| **微信** | 个人指令 | 私聊它对它说话 |
-| **本地命令** | 不想配任何账号 | 往 `<stateDir>/cli-inbox/` 丢一个 `.md` 文件 |
-| **HTTP 接口** | 脚本/CI/另一个 agent | `POST /dsh-superagent/inbox`（需 token） |
+书阁是 **DSH 手册插件（host + client）**，自己不监听 GitHub/飞书/微信，也没有独立 HTTP 服务。
+它通过 DSH 面板、`manual_*` 工具和对话被使用。
 
-后两个是后加的，就是为了"**随便一个信道就可以开用**"。
-
-```bash
-# 本地命令：丢个文件就是一条指令
-echo "把 README 里的错别字改掉" > ~/.dsh/dsh-manuscript/cli-inbox/fix-typo.md
-# 回复会写到 cli-inbox-outbox/
-
-# HTTP：任何程序都能派活
-curl -X POST http://127.0.0.1:3080/dsh-superagent/inbox \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"text":"把 README 里的错别字改掉","id":"task-1"}'
-```
+GitHub / 飞书 / 微信 / 本地命令 / HTTP 是 **SuperAgent 编排层的入口**，不是书阁插件自身的能力；
+如果你同时装了 SuperAgent，可以用那些信道派活，但不要把“五入口”算作书阁的卖点。
 
 ---
 
@@ -219,15 +207,15 @@ curl -X POST http://127.0.0.1:3080/dsh-superagent/inbox \
 
 | 指标 | 值 |
 |:---|:---|
-| 扫描会话 | 156 个 |
-| 真实任务 | 128 个 |
+| 扫描会话 | 160 个 |
+| 真实任务 | 132 个 |
 | 已提炼 | 98 个会话 |
-| **入册条目** | **276 条** |
+| **入册条目** | **280 条** |
 | 册数 | 6 |
 | 无效条目 | **0** |
-| 测试 | 24 份脚本 / **836 项通过** |
+| 测试 | Linux + peer：25 份 / **848 项通过**；无 peer：844/4；Windows 不支持 |
 
-分册：DSH 插件开发 152 · 未分类收件箱 88 · 本地模型与推理环境 23 · AI 协作方法与踩坑 5 · 网页抓取与检索 5 · 硬件设计与器件选型 3。
+分册：DSH 插件开发 156 · 未分类收件箱 88 · 本地模型与推理环境 23 · AI 协作方法与踩坑 5 · 网页抓取与检索 5 · 硬件设计与器件选型 3。
 
 ---
 
@@ -247,8 +235,8 @@ curl -X POST http://127.0.0.1:3080/dsh-superagent/inbox \
 诚实列出，不是待办清单的美化版：
 
 1. **UI 只在真实宿主渲染过三次**（2026-11-08 首次、11-09 两次），且都是抽查指定页面，不是全量点击验收
-2. **276 条条目没有逐条人工评估** —— "有没有用"程序判断不了，只有抽样看过十几条
-3. **Windows 完全未验证** —— 平台分支已写出但标注为"未验证方案"
+2. **280 条条目没有逐条人工评估** —— "有没有用"程序判断不了，只有抽样看过十几条
+3. **Windows 未支持** —— 未在 Windows 验证，CI 也不跑 Windows；平台分支不代表可用
 4. **提炼依赖模型守格式** —— 模型偶尔会写散文而不是 JSON，重试一次仍失败就丢掉那批
 5. **历史条目的归册不会自动修正** —— 新增册只对未来入册生效（`volume` 入册时写死，尊重"只追加"）
 

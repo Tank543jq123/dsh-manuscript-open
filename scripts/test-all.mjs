@@ -54,6 +54,7 @@ export const SUITES = [
   'test-toolshelf.mjs',
   'test-api-tools.mjs',
   'test-mount.mjs',
+  'test-redact.mjs',
   'test-apply-section.mjs',
   'test-client-load.mjs',
   'test-http-guards.mjs',

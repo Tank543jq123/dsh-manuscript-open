@@ -1,5 +1,29 @@
 # 变更记录
 
+## v1.1.2 — 2026-11-09
+
+修工具包可用性显示 bug：
+
+- **未安装的 rea 不再出现在工具架/系统提示词**：`TOOL_PACKS` 仍是静态定义，但 `availableToolPacks()` 用 `command` 与脚本路径存在性过滤；工具架、系统提示、`manual_mount` 的可用 id 都走过滤结果。
+- **`manual_mount('rea')` 在缺文件时直接报“未安装”**，不再尝试启动不存在的 server。
+- 测试改为模拟“本机已安装 rea”的临时路径；真实未安装场景由 `test-toolpacks` 的缺失路径断言覆盖。
+- test-all 25 份 / **848**；npm pack 25 文件 / 231.8 kB，无 data/。
+
+
+## v1.1.1 — 2026-11-09
+
+P0-1 隐私防线 + 文档口径修正：
+
+- **新增 `lib/redact.js`**：送模型与入册前确定性脱敏私钥/GitHub/OpenAI/AWS token/Bearer/密码赋值/私有 IP/邮箱/home 路径/SSH。默认开启，`DSH_MANUSCRIPT_REDACT=0` 才关闭。
+- **新增 T1 开关**：`DSH_MANUSCRIPT_T1=0` 完全禁用 T1；T0 不受影响。
+- `test-redact.mjs` 新增 10 项断言；test-all 现在 **25 份 / 848**。
+- 测试数字限定为 **Linux + @deepseek-ai/dsh-tools：25 份 / 848**；无 peer 为 **844/4**；明确 Windows 不支持（CI 不跑 Windows）。
+- 删除“五种入口/本地命令/HTTP”错误描述：书阁是 DSH host+client 插件，cli/http 属于 SuperAgent 编排层。
+- 增加**数据边界**：T1 送模型前默认脱敏；条目仍明文落盘（无加密）；敏感会话不要跑 T1。
+- 更新实测数字为 160 会话 / 280 条目 / 98 已提炼；selfcheck 说明改为只读会话、建库落临时根。
+- 重新移除被加回的个人技术文档/内部截图引用；公开版不含内部工作区信息。
+
+
 ## v1.1.0 — 2026-11-09
 
 ### 新增 · CI
