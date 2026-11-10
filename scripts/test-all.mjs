@@ -43,6 +43,7 @@ export const SUITES = [
   'test-adjudicate.mjs',
   'test-pipeline.mjs',
   'test-dupjudge.mjs',
+  'test-host-model.mjs',
   'test-atomic.mjs',
   'test-commit.mjs',
   'test-health.mjs',
