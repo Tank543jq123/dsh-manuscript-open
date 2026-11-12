@@ -274,7 +274,8 @@ check('只有 A 的条目**仍然**被召回（不误杀）', () => {
 })
 
 check('只有 B 的条目**仍然**被召回（不误杀）', () => {
-  const hits = queryAll()
+  // fail-closed 门槛后，关键词堆砌式长查询会被有意过滤；用真实问法验证不误杀。
+  const hits = matchEntries(SNAP, 'Gitea 凭据 轮换', 20)
   const ids = hits.map((h) => h.id)
   assert(ids.includes(BAD_NOFB.id), `损坏但非兜底的 ${BAD_NOFB.id} 被误杀了`)
   return `${BAD_NOFB.id} 仍可召回`

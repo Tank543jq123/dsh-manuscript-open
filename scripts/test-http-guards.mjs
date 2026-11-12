@@ -162,7 +162,7 @@ const paths = routes.map((r) => r.path)
 // 10 条 = 原 9 条 + N-10 的兜底 prefix（2026-11-06 第三轮 QA 补）。
 // 兜底的必要性见 scripts/test-http-hardening.mjs：没有它，打错的路由会落到宿主的
 // SPA fallback 上，回一个 0 字节空 404 —— 与其余 9 条的 JSON 契约不一致。
-check('注册了 10 条路由（D-02 新增 /distill/model，N-10 新增 /api 兜底）', paths.length === 10, `实际 ${paths.length} 条：${paths.length ? '' : '(空)'}`)
+check('注册了 12 条路由（新增 /api/search 与 /api/entry）', paths.length === 12, `实际 ${paths.length} 条：${paths.length ? '' : '(空)'}`)
 check('新增 /api/distill/model', paths.includes('/dsh-manuscript/api/distill/model'))
 check('保留 /api/rescan', paths.includes('/dsh-manuscript/api/rescan'))
 check('新增 /api 兜底 prefix（N-10）', paths.includes('/dsh-manuscript/api'))
