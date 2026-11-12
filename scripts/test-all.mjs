@@ -49,6 +49,7 @@ export const SUITES = [
   'test-volume-fallback.mjs',
   'test-chapter-triage.mjs',
   'test-recall-filter.mjs',
+  'test-recall-skeleton.mjs',
   'test-recall-short.mjs',
   'test-scan-fixture.mjs',
   'test-toolshelf.mjs',
