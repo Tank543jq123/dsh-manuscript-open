@@ -1,0 +1,17 @@
+[Unit]
+Description=应用书阁巡检设置（改写 timer OnCalendar 并 enable/disable）
+Documentation=file:///home/yourname/src/dsh-manuscript/scripts/apply-check-schedule.mjs
+After=network.target
+
+[Service]
+# path unit 监听 ~/.dsh/dsh-manuscript/check-settings.json；文件一变就跑这一趟。
+# 服务端只写文件、不调 systemctl —— 职责切开的理由是：写设置的人不需要有
+# systemd 权限，而改调度的人不需要懂 HTTP。
+Type=oneshot
+WorkingDirectory=/home/yourname/src/dsh-manuscript
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/node scripts/apply-check-schedule.mjs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=manuscript-check-settings
+TimeoutStartSec=2min

@@ -274,7 +274,9 @@ check('只有 A 的条目**仍然**被召回（不误杀）', () => {
 })
 
 check('只有 B 的条目**仍然**被召回（不误杀）', () => {
-  // fail-closed 门槛后，关键词堆砌式长查询会被有意过滤；用真实问法验证不误杀。
+  // 2026-11-12 加了 fail-closed 门槛后，「把十几个关键词堆在一起」的查询会被有意
+  // 过滤（它本来就不是人话）。这条断言关心的是「污染过滤不误杀」，所以用真实问法
+  // 去查——损伤条目的标题/claim 里确实有「Gitea 凭据 轮换」。
   const hits = matchEntries(SNAP, 'Gitea 凭据 轮换', 20)
   const ids = hits.map((h) => h.id)
   assert(ids.includes(BAD_NOFB.id), `损坏但非兜底的 ${BAD_NOFB.id} 被误杀了`)

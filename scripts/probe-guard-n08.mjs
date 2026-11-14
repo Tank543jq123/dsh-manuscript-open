@@ -21,7 +21,7 @@ process.env.DSH_SESSIONS_ROOT = join(TMP, 'sessions')
 process.env.DSH_WORKSPACE_JSON = join(TMP, 'nope.json')
 mkdirSync(LIB_ROOT, { recursive: true })
 mkdirSync(process.env.DSH_SESSIONS_ROOT, { recursive: true })
-process.argv[1] = 'C:/Users/<user>/AppData/Local/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js'
+process.argv[1] = 'C:/Users/<user>/AppData/Local/OpenClaw/deps/portable-node/node_modules/@deepseek-ai/dsh/lib/bin.js'
 
 const { apply } = await import('../lib/index.js')
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=书阁巡检设置变化后自动应用（时间 / 启用状态）
+
+[Path]
+# 只盯设置文件本身：书库目录里还有 entries/、library.json 等高频写入，
+# 盯目录会让巡检设置被无关的建库动作反复触发。
+PathModified=%h/.dsh/dsh-manuscript/check-settings.json
+Unit=manuscript-daily-check-settings.service
+
+[Install]
+WantedBy=paths.target

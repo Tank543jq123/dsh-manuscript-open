@@ -278,6 +278,66 @@ try {
     ok('stale=true 但无时间依据时不显示 0 分钟',
       !unknownAgeText.includes('0 分钟前'), unknownAgeText.slice(0, 80));
 
+    // ⑦ 巡检设置面板（2026-11-12）：源码契约
+    ok('产物含 API_CHECK_SETTINGS', src.includes('/dsh-manuscript/api/check-settings'));
+    ok('产物含 API_CHECK_RUN', src.includes('/dsh-manuscript/api/check-run'));
+    ok('产物含巡检设置折叠标题', src.includes('巡检设置 · 每日自动检查'));
+
+    // ⑦b 真的把面板渲染出来：props 里同时有 onSave/onRun 的那个元素
+    const checkEl = findDeep(mainTree, (_el, p) => p && typeof p.onSave === 'function' && typeof p.onRun === 'function');
+    ok('巡检设置面板已渲染（props 含 onSave/onRun）', !!checkEl);
+    if (checkEl) {
+      const CheckPanel = checkEl.args[0];
+      const baseCheck = {
+        state: { phase: 'ready', data: { ok: true, settings: { enabled: true, time: '07:00' }, nextRun: '2026-11-13T07:00:00+08:00', warnings: [] } },
+        enabled: true,
+        time: '07:00',
+        phase: 'idle',
+        msg: null,
+        onSave: noop,
+        onRun: noop,
+        onEnabled: noop,
+        onTime: noop,
+      };
+      // 未就绪：不编"下次运行"（与顶栏"未就绪不显示分钟前"同一条纪律）
+      const loadingText = allText(CheckPanel({ ...baseCheck, state: { phase: 'loading', data: null } }));
+      ok('设置未就绪时不显示下次运行', !loadingText.includes('下次运行'), loadingText.slice(0, 80));
+
+      const onText = allText(CheckPanel(baseCheck));
+      ok('已启用显示「每天 07:00」', onText.includes('每天 07:00'), onText.slice(0, 100));
+      ok('已启用显示下次运行（约）', onText.includes('下次运行：约'), onText.slice(0, 140));
+      ok('写明了 timer 的随机延迟', onText.includes('随机延迟'), onText.slice(0, 160));
+
+      const offText = allText(CheckPanel({
+        ...baseCheck,
+        enabled: false,
+        state: { phase: 'ready', data: { ok: true, settings: { enabled: false, time: '07:00' }, nextRun: null, warnings: [] } },
+      }));
+      ok('停用显示「不会自动巡检」', offText.includes('不会自动巡检'), offText.slice(0, 100));
+      ok('停用时下次运行写「无」（不是留空/不写）', offText.includes('下次运行：无'), offText.slice(0, 140));
+
+      // 草稿 ≠ 已保存：必须提示"未保存"，否则勾上开关会以为已经生效
+      const dirtyText = allText(CheckPanel({ ...baseCheck, enabled: false }));
+      ok('草稿与已保存值不一致时提示「未保存」', dirtyText.includes('未保存'), dirtyText.slice(0, 160));
+
+      // 控件接线：勾选框与时间框必须回传值，而不是把事件对象传下去
+      let enabledArg = 'not-called';
+      let timeArg = 'not-called';
+      const wired = CheckPanel({
+        ...baseCheck,
+        onEnabled: (v) => { enabledArg = v; },
+        onTime: (v) => { timeArg = v; },
+      });
+      const box = findDeep(wired, (el, p) => el && el.args && el.args[0] === 'input' && p && p.type === 'checkbox');
+      const timeInput = findDeep(wired, (el, p) => el && el.args && el.args[0] === 'input' && p && p.type === 'time');
+      ok('启停开关存在（checkbox）', !!box);
+      ok('时间选择存在（input[type=time]）', !!timeInput);
+      if (box) box.args[1].onChange({ target: { checked: false } });
+      if (timeInput) timeInput.args[1].onChange({ target: { value: '23:30' } });
+      ok('勾选框回传布尔值', enabledArg === false, 'enabledArg=' + String(enabledArg));
+      ok('时间框回传 HH:MM 字符串', timeArg === '23:30', 'timeArg=' + String(timeArg));
+    }
+
     // ⑥ 入册 / 通过-丢弃 两个既有入口仍在（回归保护）
     const withEntries = allText(DistillPanel({
       ...baseProps,

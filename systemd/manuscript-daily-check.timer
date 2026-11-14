@@ -1,0 +1,12 @@
+[Unit]
+Description=每天 09:00 跑书阁巡检
+
+[Timer]
+# 本机时区 Asia/Shanghai；错过（关机/休眠）时开机补跑一次
+OnCalendar=*-*-* 07:00:00
+Persistent=true
+# 避免与其他整点任务撞在同一秒
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

@@ -121,8 +121,8 @@ function fakeTriaged(n = 8) {
   for (let i = 0; i < n; i++) {
     arr.push({
       sid: `sess-fake-${String(i).padStart(3, '0')}`,
-      project: i % 2 === 0 ? 'demo-hardware' : 'demo-a',
-      cwd: 'C:\\demo-workspace\\' + (i % 2 === 0 ? 'demo-hardware' : 'demo-a'),
+      project: i % 2 === 0 ? 'hwplatform' : '宁谷微',
+      cwd: 'C:\\DSH工作空间\\' + (i % 2 === 0 ? 'hwplatform' : '宁谷微'),
       category: 'real',
       admission: 'strong',
       shape: 'multi-turn',

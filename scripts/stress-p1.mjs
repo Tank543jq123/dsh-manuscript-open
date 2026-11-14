@@ -138,7 +138,7 @@ function cleanupAll() {
  * toolNameCount / createdAt / turnEnds / toolCalls / deliverables / qualityScore / shape）。
  */
 function makeSessions(n, opts = {}) {
-  const projects = ['demo-a', 'demo-hardware', 'demo-c', 'demo-e', 'demo-d', 'demo-b']
+  const projects = ['宁谷微', 'hwplatform', 'ec分支器', '硬件设计助手', '咖啡机项目', '唐小旋']
   const out = []
   const base = opts.baseTime ?? 1730000000000
   for (let i = 0; i < n; i++) {
@@ -147,7 +147,7 @@ function makeSessions(n, opts = {}) {
       category: 'real',
       title: `压测会话 ${i} · ${projects[i % projects.length]}`,
       project: projects[i % projects.length],
-      cwd: `C:\\demo-workspace\\${projects[i % projects.length]}`,
+      cwd: `C:\\DSH工作空间\\${projects[i % projects.length]}`,
       toolNameCount: { pwsh: (i % 7) + 1, write: (i % 3), read: (i % 5) },
       createdAt: base + i * 1000,
       turnEnds: (i % 5) + 1,

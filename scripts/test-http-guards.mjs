@@ -42,7 +42,7 @@ mkdirSync(LIB_ROOT, { recursive: true })
 
 // apply() 里的 defineTool 惰性装载会从 argv[1] 推导 DSH 安装根。
 // 给一个真实 bin.js 路径，让它走"宿主进程内可解析"这条路（解析不到也不影响本测试）。
-const REAL_BIN = 'C:/Users/<user>/AppData/Local/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js'
+const REAL_BIN = 'C:/Users/<user>/AppData/Local/OpenClaw/deps/portable-node/node_modules/@deepseek-ai/dsh/lib/bin.js'
 process.argv[1] = REAL_BIN
 
 const { apply } = await import('../lib/index.js')
@@ -159,16 +159,35 @@ console.log('\n── 0. 路由装配 ──')
 await apply(mockCtx)
 
 const paths = routes.map((r) => r.path)
-// 10 条 = 原 9 条 + N-10 的兜底 prefix（2026-11-06 第三轮 QA 补）。
+// 17 条 = 原 9 条 + N-10 的兜底 prefix + 2026-11-12 的 /api/search、/api/entry
+//        + /api/check-settings、/api/check-run、/api/library-config
+//        + 体验改造 P1 的 /api/timeline、/api/entry-save。
 // 兜底的必要性见 scripts/test-http-hardening.mjs：没有它，打错的路由会落到宿主的
-// SPA fallback 上，回一个 0 字节空 404 —— 与其余 9 条的 JSON 契约不一致。
-check('注册了 12 条路由（新增 /api/search 与 /api/entry）', paths.length === 12, `实际 ${paths.length} 条：${paths.length ? '' : '(空)'}`)
+// SPA fallback 上，回一个 0 字节空 404 —— 与其余端点的 JSON 契约不一致。
+check('注册了 17 条路由（原 9 条 + search/entry + check/library-config + timeline/entry-save）', paths.length === 17, `实际 ${paths.length} 条：${paths.length ? '' : '(空)'}`)
 check('新增 /api/distill/model', paths.includes('/dsh-manuscript/api/distill/model'))
+check('新增 /api/search', paths.includes('/dsh-manuscript/api/search'))
+check('新增 /api/entry', paths.includes('/dsh-manuscript/api/entry'))
+check('新增 /api/check-settings', paths.includes('/dsh-manuscript/api/check-settings'))
+check('新增 /api/check-run', paths.includes('/dsh-manuscript/api/check-run'))
 check('保留 /api/rescan', paths.includes('/dsh-manuscript/api/rescan'))
 check('新增 /api 兜底 prefix（N-10）', paths.includes('/dsh-manuscript/api'))
 for (const p of ['summary', 'tools', 'sessions', 'distill/plan']) {
   check(`/api/${p} 仍注册`, paths.includes(`/dsh-manuscript/api/${p}`))
 }
+check('新增 /api/library-config', paths.includes('/dsh-manuscript/api/library-config'))
+
+// 库路径端点：只读 GET 必须能回当前生效根；POST 非法路径必须在写盘前 400。
+const cfgRead = await call('/dsh-manuscript/api/library-config')
+check('GET /api/library-config 返回生效根', cfgRead.status === 200 && cfgRead.body?.ok === true && cfgRead.body?.root === LIB_ROOT,
+  `status=${cfgRead.status} root=${cfgRead.body?.root}`)
+check('GET /api/library-config 标明来源是 env', cfgRead.body?.source === 'env', `source=${cfgRead.body?.source}`)
+const cfgBad = await call('/dsh-manuscript/api/library-config', {
+  method: 'POST',
+  headers: { 'x-dsh-manuscript': '1' },
+  body: JSON.stringify({ root: 'relative/path' }),
+})
+check('POST /api/library-config 相对路径 → 400', cfgBad.status === 400, `status=${cfgBad.status} error=${cfgBad.body?.error}`)
 
 // 等首次后台扫描完成（apply 里 800ms 起扫）。轮询 summary 直到 200 —— 这比 sleep
 // 固定时长可靠：扫描耗时随会话数变化，睡死一个数字迟早假绿或假红。

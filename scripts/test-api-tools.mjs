@@ -1,15 +1,7 @@
 // 端到端验证 /api/tools 路由：用 mock ctx 真跑 apply()，再调用注册的 handler。
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-const _reaDir = mkdtempSync(join(tmpdir(), 'book-rea-'))
-const _reaScript = join(_reaDir, 'rea.mjs')
-writeFileSync(_reaScript, '')
-process.env.REA_NODE = process.execPath
-process.env.REA_SCRIPT = _reaScript
-const { apply } = await import('../lib/index.js');
+import { apply } from '../lib/index.js';
 
-const REAL_BIN = 'C:/Users/<user>/AppData/Local/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js';
+const REAL_BIN = 'C:/Users/<user>/AppData/Local/OpenClaw/deps/portable-node/node_modules/@deepseek-ai/dsh/lib/bin.js';
 process.argv[1] = REAL_BIN;
 
 const routes = [];

@@ -55,7 +55,7 @@ for (const project of ['default workspace', 'default-workspace', '1e7f6d9597241d
 
 console.log('\n── 3. 章 slug 不把长名字切成半词 ──')
 {
-  const long = 'review-demo-workspace-abcdefghijklmnop'
+  const long = 'review-dsh-manuscript-abcdefghijklmnop'
   const spec = chapterSpec({ title: '无关标题', project: long })
   check('长项目名的 slug 不超过 28+5 字符', spec.slug.length <= 33, `${spec.slug}（${spec.slug.length}）`)
   check('超长时附 4 位哈希以避免撞章', /-[0-9a-f]{4}$/.test(spec.slug), spec.slug)

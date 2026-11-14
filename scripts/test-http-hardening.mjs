@@ -53,8 +53,8 @@ mkdirSync(LIB_ROOT, { recursive: true })
 // 现在按真实落盘格式种两个最小会话，让这些路由真的被验证。
 writeSessionFixture(SESSIONS_ROOT, {
   sid: 'session-harden-a',
-  projectDir: '-D-proj-demo-hardware',
-  cwd: 'D:\\proj\\demo-hardware',
+  projectDir: '-D-proj-hwplatform',
+  cwd: 'D:\\proj\\hwplatform',
   title: '嘉立创2.0双排针选型',
 })
 writeSessionFixture(SESSIONS_ROOT, {
@@ -173,7 +173,7 @@ console.log('\n── 0. 路由装配 ──')
 await apply(mockCtx)
 
 const paths = routes.map((r) => r.path)
-check('注册了 12 条路由（新增 /api/search 与 /api/entry）', paths.length === 12, `实际 ${paths.length} 条`)
+check('注册了 17 条路由（原 10 条 + search/entry + check/library-config + timeline/entry-save）', paths.length === 17, `实际 ${paths.length} 条`)
 check('兜底 prefix /api 已注册', paths.includes('/dsh-manuscript/api'))
 
 console.log('\n   等待首次后台扫描完成…')

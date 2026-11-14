@@ -39,11 +39,11 @@ import { zstdCompressSync } from 'node:zlib'
 export function writeSessionFixture(root, spec = {}) {
   const {
     sid = 'session-fixture-0001',
-    projectDir = '-D-proj-demo-hardware',
-    cwd = 'D:\\proj\\demo-hardware',
+    projectDir = '-D-proj-hwplatform',
+    cwd = 'D:\\proj\\hwplatform',
     title = '嘉立创2.0双排针选型',
     createdAt = Date.parse('2026-11-01T10:00:00.000Z'),
-    tools = [{ name: 'write', args: { file_path: 'D:\\proj\\demo-hardware\\选型.md' } }],
+    tools = [{ name: 'write', args: { file_path: 'D:\\proj\\hwplatform\\选型.md' } }],
     deliverables = 1,
     turns = 1,
     version = 1,

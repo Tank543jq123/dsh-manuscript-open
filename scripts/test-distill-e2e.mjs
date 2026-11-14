@@ -42,8 +42,8 @@ mkdirSync(SESSIONS_ROOT, { recursive: true })
 // 最先被 queue 选中的那个（createdAt 最新）—— 用来测"单会话批次"
 writeSessionFixture(SESSIONS_ROOT, {
   sid: 'session-t1',
-  projectDir: '-D-proj-demo-hardware',
-  cwd: 'D:\\proj\\demo-hardware',
+  projectDir: '-D-proj-hwplatform',
+  cwd: 'D:\\proj\\hwplatform',
   title: '嘉立创2.0双排针选型',
   turns: 2,
   createdAt: Date.parse('2026-11-05T10:00:00.000Z'),

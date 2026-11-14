@@ -106,7 +106,7 @@ const FIXTURES = {
   validVolume: {
     id: 'e-0valid00001',
     volume: 'vol-01',
-    chapter: 'ch-demo-hardware',
+    chapter: 'ch-hwplatform',
     claim: '合法归属的条目，兜底逻辑必须一个字都不动它',
     title: '合法归属的条目（阴性对照）',
     status: 'current',
@@ -121,7 +121,7 @@ const FIXTURES = {
   paddedVolume: {
     id: 'e-9pad0000001',
     volume: '  vol-01  ',
-    chapter: 'ch-demo-hardware',
+    chapter: 'ch-hwplatform',
     claim: 'volume 归属正确但两边带空白，严格相等匹配不上，同样会掉出目录',
     title: 'volume 带空白的条目',
     status: 'current',

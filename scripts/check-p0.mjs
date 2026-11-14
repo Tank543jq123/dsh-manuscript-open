@@ -179,7 +179,7 @@ check('P0-3b 判定表按"首个匹配胜出"实现', () => {
 check('P0-1d fail-closed 真实有效（不相关查询必须 0 命中）', () => {
   // 这是 P0 里最脆弱的一环：规约第 2 条「查不到就明说」完全依赖这个行为。
   // 2026-11-02 实测发现过漏词导致误命中，故固化为回归测试。
-  const path = 'C:/demo-workspace/技能手册梳理插件/dsh-manuscript/lib/index.js';
+  const path = 'C:/DSH工作空间/技能手册梳理插件/dsh-manuscript/lib/index.js';
   const src2 = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
   // 静态断言：停用词表必须覆盖这些高频虚词
   const must = ['完全', '可能', '不可', '没有', '什么', '怎么'];

@@ -1,13 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-// 让 rea 在这台测试机上“已安装”，避免测试依赖开发机路径；未安装的过滤由 test-toolpacks 覆盖。
-const _reaDir = mkdtempSync(join(tmpdir(), 'book-rea-'))
-const _reaScript = join(_reaDir, 'rea.mjs')
-writeFileSync(_reaScript, '')
-process.env.REA_NODE = process.execPath
-process.env.REA_SCRIPT = _reaScript
-const {
+import {
   resolvePack,
   buildMountConfig,
   diffMountedTools,
@@ -18,7 +9,7 @@ const {
   mountPack,
   unmountPack,
   TOOL_PACKS,
-} = await import('../lib/index.js');
+} from '../lib/index.js';
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log(`✓ ${n}${d ? '  ' + d : ''}`)) : (fail++, console.log(`✗ ${n}${d ? '  ' + d : ''}`)); };
@@ -59,8 +50,8 @@ ok('前后空格被容忍', padded.ok && padded.pack.id === 'fake');
   const ghost = { ...FAKE, id: 'ghost', args: ['/definitely/not/here-' + Date.now()] }
   const r = resolvePack('ghost', [ghost])
   ok('入口脚本不存在的包被拒', r.ok === false)
-  ok('拒绝原因含「本机不可用」', r.ok === false && /未安装|本机不可用/.test(r.reason), (r.reason || '').slice(0, 50))
-  ok('拒绝原因指出入口脚本缺失', r.ok === false && /缺少 command 或脚本|入口脚本不存在|没有可启动/.test(r.reason))
+  ok('拒绝原因含「本机不可用」', r.ok === false && r.reason.includes('本机不可用'), (r.reason || '').slice(0, 50))
+  ok('拒绝原因指出入口脚本缺失', r.ok === false && r.reason.includes('入口脚本不存在'))
 }
 // 未知 id 的提示里应带上**当前传入的**可用列表，不能假设本机有 rea
 ok('未知 id 报错含可用列表', resolvePack('nope', fakePacks).reason.includes('fake'))

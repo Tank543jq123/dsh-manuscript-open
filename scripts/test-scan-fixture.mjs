@@ -43,7 +43,7 @@ try {
     `sessions=${scanned.sessions.length} errors=${JSON.stringify(scanned.errors)}`)
   const a = scanned.sessions[0]
   check('标题来自 session/title 事件', a.title === '嘉立创2.0双排针选型', a.title)
-  check('项目名来自 header.cwd（不是目录名解码）', a.project === 'demo-hardware', a.project)
+  check('项目名来自 header.cwd（不是目录名解码）', a.project === 'hwplatform', a.project)
   check('工具调用与交付物计数正确', a.toolCalls === 1 && a.deliverables === 1,
     `toolCalls=${a.toolCalls} deliverables=${a.deliverables}`)
   check('turn 结束原因被记录', a.lastEndReason === 'completed', a.lastEndReason)
@@ -129,7 +129,7 @@ try {
     writeSessionFixture(sessRoot, {
       sid: 's-xss',
       title: '<img src=x onerror=alert(1)> 恶意标题',
-      cwd: 'D:\\proj\\demo-hardware',
+      cwd: 'D:\\proj\\hwplatform',
     })
     try {
       const scannedX = scanSessions({ sessionsRoot: sessRoot })
