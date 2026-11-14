@@ -54,6 +54,7 @@ export const SUITES = [
   'test-recall-filter.mjs',
   'test-recall-skeleton.mjs',
   'test-recall-short.mjs',
+  'test-recall-no-needle.mjs',
   'test-recall-semantic.mjs',
   'test-recall-vector.mjs',
   'test-scan-fixture.mjs',
