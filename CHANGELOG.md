@@ -1,5 +1,12 @@
 # 变更记录
 
+## v1.2.2 — 2026-11-14（清理与 CI 加固）
+
+- 删除仓库里的历史备份文件（`docs/backups/*.bak-*`、`lib/*.bak-*`），并把 `*.bak-*`、`backups/` 加入 `.gitignore`。
+- 新增 `scripts/test-api-contract.mjs`：**不依赖本机书库**（临时目录手写两条 .md 作语料），
+  钉住 `topK` 文案、`clamped`、`/api/trace` 四种结果与 `entry-save` 守门头，
+  随 `test-all.mjs` 在 CI 上跑。全量 33 份脚本 1103 项通过。
+
 ## v1.2.1 — 2026-11-14（QA P3 修复）
 
 - `search` 的 `topK` 非法值报错文案与 URL 参数名对齐（此前误写成 `limit`）。
