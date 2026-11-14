@@ -1,6 +1,6 @@
 [Unit]
 Description=书阁每日巡检（正向/负控召回回归 + 全量测试套件）
-Documentation=file:///home/yourname/src/dsh-manuscript/scripts/daily-check.mjs
+Documentation=https://github.com/Tank543jq123/dsh-manuscript-open
 After=network.target
 
 [Service]
@@ -8,7 +8,8 @@ After=network.target
 # 由每天 08:30 的早间提醒一并带出。
 Environment=NO_PUSH=1
 Type=oneshot
-WorkingDirectory=/home/yourname/src/dsh-manuscript
+# 按你的实际 clone 路径调整（%h = 当前用户 home）
+WorkingDirectory=%h/src/dsh-manuscript-open
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 ExecStart=/usr/bin/node scripts/daily-check.mjs
 # 巡检脚本自己会推微信；systemd 这里只收 stdout/journal，红了靠退出码标记

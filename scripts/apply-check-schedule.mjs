@@ -16,7 +16,7 @@
  *
  *   `systemctl --user disable` 对 **linked unit**（搜索路径里的软链）不是只删
  *   `timers.target.wants`，而是**连软链本身一起删掉**（日志原文：
- *   `Removed '/home/yourname/.config/systemd/user/manuscript-daily-check.timer'`）。
+ *   `Removed '~/.config/systemd/user/manuscript-daily-check.timer'`）。
  *   删完 `is-enabled` 变 `not-found`，`systemctl cat` 也读不到 —— 再 enable 会失败，
  *   面板上"关掉再打开"这条路直接断掉。
  *   更根本的是：linked unit 的 `is-enabled` 只会回 `linked`，永远不会回 `disabled`，

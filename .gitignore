@@ -59,3 +59,5 @@ coverage/
 .nyc_output/
 *.tmp
 tmp/
+# 手工备份文件（*.bak-<时间>/<标签>）不纳入版本库
+*.bak-*
