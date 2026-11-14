@@ -164,7 +164,7 @@ const paths = routes.map((r) => r.path)
 //        + 体验改造 P1 的 /api/timeline、/api/entry-save。
 // 兜底的必要性见 scripts/test-http-hardening.mjs：没有它，打错的路由会落到宿主的
 // SPA fallback 上，回一个 0 字节空 404 —— 与其余端点的 JSON 契约不一致。
-check('注册了 17 条路由（原 9 条 + search/entry + check/library-config + timeline/entry-save）', paths.length === 17, `实际 ${paths.length} 条：${paths.length ? '' : '(空)'}`)
+check('注册了 18 条路由（2026-11-14 新增 /api/trace）', paths.length === 18, `实际 ${paths.length} 条：${paths.length ? '' : '(空)'}`)
 check('新增 /api/distill/model', paths.includes('/dsh-manuscript/api/distill/model'))
 check('新增 /api/search', paths.includes('/dsh-manuscript/api/search'))
 check('新增 /api/entry', paths.includes('/dsh-manuscript/api/entry'))

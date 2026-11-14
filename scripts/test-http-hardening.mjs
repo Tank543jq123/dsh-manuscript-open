@@ -173,7 +173,7 @@ console.log('\n── 0. 路由装配 ──')
 await apply(mockCtx)
 
 const paths = routes.map((r) => r.path)
-check('注册了 17 条路由（原 10 条 + search/entry + check/library-config + timeline/entry-save）', paths.length === 17, `实际 ${paths.length} 条`)
+check('注册了 18 条路由（2026-11-14 新增 /api/trace）', paths.length === 18, `实际 ${paths.length} 条`)
 check('兜底 prefix /api 已注册', paths.includes('/dsh-manuscript/api'))
 
 console.log('\n   等待首次后台扫描完成…')

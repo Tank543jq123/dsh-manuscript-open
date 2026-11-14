@@ -1,5 +1,13 @@
 # 变更记录
 
+## v1.2.1 — 2026-11-14（QA P3 修复）
+
+- `search` 的 `topK` 非法值报错文案与 URL 参数名对齐（此前误写成 `limit`）。
+- `search` 在 `topK` 超过上限时返回 `topK`（实际生效值）与 `clamped: true`，不再静默夹取。
+- 新增只读 `GET /dsh-manuscript/api/trace?entry_id=…`，与 `manual_trace` 同源返回出处五元组
+  （此前只有工具，HTTP 端点缺失）。
+- 路由数断言同步到 18 条；全量 32 份脚本 1093 项通过。
+
 ## v1.2.0 — 2026-11-14（Markdown 图书馆 + 体验改造 + 每日巡检）
 
 ### 新增 · Markdown 图书馆（可配置目录，多实例共享）
