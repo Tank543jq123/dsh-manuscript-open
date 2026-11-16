@@ -79,23 +79,21 @@ check('scan → triage → buildLibrary', () => {
   return `${scanned.sessions.length} 会话 → ${built.entries} 条入册`
 })
 
-// 夹具会话只带标题与工具调用，建出来的条目没有正文（body=claim），
+// 夹具会话只带标题与工具调用，建出来的条目 why 是空串，正文退化成 claim；
 // 而 test-ui-endpoints 会断言「正文来自 why、与 claim 不同」。
-// 这里给每个条目补一段 why，让新库具备真实条目的形态 —— 补的是夹具，不是产品数据。
+// 这里给每个条目的 entries/*.json 补一段 why —— 补的是夹具，不是产品数据。
 check('给夹具条目补正文（why 段）', () => {
+  const dir = join(LIB, 'entries')
   let patched = 0
-  const walk = (dir) => {
-    for (const name of readdirSync(dir, { withFileTypes: true })) {
-      const p = join(dir, name.name)
-      if (name.isDirectory()) { walk(p); continue }
-      if (!name.name.endsWith('.md')) continue
-      const src = readFileSync(p, 'utf8')
-      if (src.includes('## 为什么')) continue
-      writeFileSync(p, src.replace(/\n?$/, '\n\n## 为什么\n这条结论来自一次真实验证：装完刷新页面即见效，不需要重启进程。\n'))
-      patched += 1
-    }
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.json')) continue
+    const p = join(dir, name)
+    const obj = JSON.parse(readFileSync(p, 'utf8'))
+    if (obj.why && String(obj.why).trim()) continue
+    obj.why = '实测：装完刷新页面即见效，不需要重启进程；同一条命令跑两次结果一致。'
+    writeFileSync(p, JSON.stringify(obj, null, 2) + '\n')
+    patched += 1
   }
-  walk(LIB)
   assert(patched > 0, '没有条目被补正文')
   return `${patched} 条`
 })

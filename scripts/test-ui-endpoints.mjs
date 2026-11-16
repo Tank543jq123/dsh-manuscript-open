@@ -18,7 +18,7 @@
  * 会话根指向空目录：buildLibrary 靠 entries/ 做幂等合并，不扫会话也能保留全部条目。
  */
 
-import { mkdtempSync, mkdirSync, cpSync, rmSync, existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, cpSync, rmSync, existsSync, readFileSync, writeFileSync, chmodSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
@@ -208,11 +208,28 @@ check('取得一个真实条目 id 用于详情测试', !!sampleId, String(sampl
   console.log('   样例：', JSON.stringify({ id: e.id, title: e.title, body: String(e.body || '').slice(0, 120), bodyIsClaim: e.bodyIsClaim, volumeName: e.volumeName, chapter: e.chapter }, null, 1))
 
   // 已提炼的条目必须能拿到 why（正文），而不是只有 claim。
-  // e-b905855e6d7b 是真实库里的已提炼条目（write 先读后写那条），正文与摘要不同。
-  const deep = await call('/dsh-manuscript/api/entry', { url: '/dsh-manuscript/api/entry?id=e-b905855e6d7b' })
-  check('已提炼条目 → 200 且 bodyIsClaim=false', deep.status === 200 && deep.body?.entry?.bodyIsClaim === false, `status=${deep.status} bodyIsClaim=${deep.body?.entry?.bodyIsClaim}`)
-  check('正文来自 why（与 claim 不同）', !!deep.body?.entry?.body && deep.body.entry.body !== deep.body.entry.claim)
-  console.log('   正文样例：', String(deep.body?.entry?.body || '').slice(0, 120))
+  // 2026-11-16：原来这里硬编码了真实库里的 e-b905855e6d7b，换成夹具库后该 id 不存在，
+  // 两条断言必然红 —— 那是在测「这台机器上恰好有那条」，不是测代码。改成从当前库
+  // 里挑一个真正有 why 的条目；库里一个都没有（夹具库）就明确跳过。
+  const entriesDir = join(LIB_ROOT, 'entries')
+  const refinedId = (() => {
+    try {
+      for (const name of readdirSync(entriesDir)) {
+        if (!name.endsWith('.json')) continue
+        const obj = JSON.parse(readFileSync(join(entriesDir, name), 'utf8'))
+        if (obj.why && String(obj.why).trim()) return obj.id
+      }
+    } catch {}
+    return null
+  })()
+  if (!refinedId) {
+    console.log('   本库没有带 why 的已提炼条目：跳过「正文来自 why」两条。')
+  } else {
+    const deep = await call('/dsh-manuscript/api/entry', { url: '/dsh-manuscript/api/entry?id=' + encodeURIComponent(refinedId) })
+    check('已提炼条目 → 200 且 bodyIsClaim=false', deep.status === 200 && deep.body?.entry?.bodyIsClaim === false, `id=${refinedId} status=${deep.status} bodyIsClaim=${deep.body?.entry?.bodyIsClaim}`)
+    check('正文来自 why（与 claim 不同）', !!deep.body?.entry?.body && deep.body.entry.body !== deep.body.entry.claim)
+    console.log('   正文样例：', String(deep.body?.entry?.body || '').slice(0, 120))
+  }
 
   const noId = await call('/dsh-manuscript/api/entry')
   check('缺 id → 400', noId.status === 400, `status=${noId.status}`)
