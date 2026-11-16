@@ -38,7 +38,7 @@ Agent 直接报出 VOL.01 的条目（规模 / 证据 / 质量口径），并明
 
 首次扫描的真实数据：139 个会话（真实任务 113）→ 113 条入册，4 册可见（vol-01/03/05 + 未分类收件箱）。
 
-**一把跑完全部测试**（32 份脚本、1093 项通过，串行，约 25 秒）：
+**一把跑完全部测试**（33 份脚本、1103 项通过，串行，约 25 秒）：
 
 ```bash
 node scripts/test-all.mjs              # 全部；任何一份失败 → 整体退出码非 0
@@ -284,7 +284,7 @@ dsh-manuscript/
 ├── package.json            声明 dsh.bundle.patch + dsh.client
 ├── cordis.patch.yml        向 profile 插一行（insert id = dsh-manuscript）
 ├── lib/                    19 个 .js，共 13,684 行
-│   ├── index.js      3898  host 插件入口：扫描/分诊/建库装配 + HTTP 路由 + 7 个注册工具 + 首轮预取
+│   ├── index.js      host 插件入口：扫描/分诊/建库装配 + HTTP 路由 + 8 个注册工具 + 首轮预取
 │   ├── client.js     2593  浏览器端 UI：左栏卡 / panellist 图标 / 书房主面板 / 提炼区块 / 入册
 │   ├── library.js    1341  建库：归册（信号加权）+ 主题章 + 目录生成 + 真相层落盘 + volume 归一化兜底
 │   ├── distill.js    1191  T1 提炼轨：用 LLM 把「会话」变成「经验条目」（只产 proposal，绝不写盘）
@@ -494,7 +494,7 @@ ctx.on('agent/pre-step', async (payload, next) => {
 - ❌ 不能挂 `user/message` —— 那是会话日志的**记录类型**，不是可订阅的 cordis 事件
 - ❌ 不建议挂 prompt section —— 同步求值，且注入内容进不了可审计的消息历史
 
-### 七个工具（实测注册数，2026-11-06）
+### 八个工具（实测注册数，2026-11-16 复核：8 个 defineTool 注册）
 
 每个工具的 schema 都是**每轮固定 token 成本**，所以历史上反复克制过"再加一个"。
 但现在实际注册了 **7 个** —— 比旧文档写的"三个，第四个不加"多出来的四个，
@@ -637,7 +637,7 @@ node scripts/build-vol06.mjs --dry-run # 只看会写出什么
 2026-11-06 的护栏改造（D-01/D-02/D-04/D-05/D-10）之后，契约变了。
 2026-11-06 第三轮 QA 又补了 N-07/N-08/N-09/N-10/N-11 五条，契约再次变化。
 client 与 host 各写各的时字段容易对不上，这里冻结**实测**形态
-（`grep "path: '/dsh-manuscript/api/" lib/index.js` = **10 条路由**，含 1 条兜底 prefix）。
+（`grep "path: '/dsh-manuscript/api/" lib/index.js` = **18 条路由**，含 1 条兜底 prefix（2026-11-16 复核））。
 host 字段是真源。
 
 ### 十条路由总表
