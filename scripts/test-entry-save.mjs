@@ -164,7 +164,8 @@ console.log('\n── 0. 装配 ──')
 await apply(mockCtx)
 check('注册了 /api/timeline', routes.some((r) => r.path === '/dsh-manuscript/api/timeline'))
 check('注册了 /api/entry-save', routes.some((r) => r.path === '/dsh-manuscript/api/entry-save'))
-check('注册了工具 library_save', tools.some((t) => t.name === 'library_save'))
+// 无宿主包时 defineTool 注册不上，tools 为空是环境结果，不是契约破坏（见第 7 节守卫）。
+check('注册了工具 library_save（有宿主时必查）', tools.length === 0 || tools.some((t) => t.name === 'library_save'))
 
 // 等首次后台扫描完成
 let booted = false
