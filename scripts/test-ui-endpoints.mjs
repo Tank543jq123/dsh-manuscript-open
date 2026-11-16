@@ -29,7 +29,16 @@ const LIB_ROOT = join(TMP, 'library')
 const SESSIONS_ROOT = join(TMP, 'sessions')
 
 mkdirSync(SESSIONS_ROOT, { recursive: true })
-if (existsSync(REAL_ROOT)) cpSync(REAL_ROOT, LIB_ROOT, { recursive: true })
+// 2026-11-16：验收流程（scripts/acceptance.mjs）会用夹具库把 DSH_MANUSCRIPT_ROOT
+// 指到临时库上。已经指定时直接用，不再复制本机真实库 —— 否则验收会悄悄变成
+// 「拿用户的库跑一遍」，既不可复现，也把真实数据卷进测试。
+const EXTERNAL_ROOT = process.env.DSH_MANUSCRIPT_ROOT && existsSync(process.env.DSH_MANUSCRIPT_ROOT)
+  ? process.env.DSH_MANUSCRIPT_ROOT
+  : null
+if (EXTERNAL_ROOT) {
+  // 夹具库：只读使用，不做写入（巡检设置文件放在临时副本里）
+  cpSync(EXTERNAL_ROOT, LIB_ROOT, { recursive: true })
+} else if (existsSync(REAL_ROOT)) cpSync(REAL_ROOT, LIB_ROOT, { recursive: true })
 else mkdirSync(LIB_ROOT, { recursive: true })
 
 // 巡检设置从"文件不存在"开始测：真实库副本里可能已经有用户设置，
