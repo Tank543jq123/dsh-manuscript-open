@@ -41,6 +41,19 @@ claim: "抓 GitHub 会撞 30 秒上限，要分段或换直连。"
 正文占位。
 `)
 
+writeFileSync(join(LIB, 'vol-03', 'ch-plugin', 'e-aaaa00000003.md'), `---
+id: "e-aaaa00000003"
+title: "双排针选型的旧记录"
+volume: "vol-03"
+chapter: "ch-plugin"
+confidence: "speculation"
+authority: "L3"
+claim: "1 轮 · 252 次工具调用 · 1 个交付物"
+meta: {"status":"expired","retiredAt":"2026-11-12T06:32:13.658Z","retiredReason":"superseded-by-distilled-entry"}
+---
+旧记录正文。
+`)
+
 process.env.DSH_MANUSCRIPT_ROOT = LIB
 process.env.DSH_SESSIONS_ROOT = join(TMP, 'sessions')
 process.env.DSH_WORKSPACE_JSON = join(TMP, 'no-such-workspace.json')
@@ -105,6 +118,10 @@ check('topK 非法值报错用参数名 topK', bad.status === 400 && /topK 必�
 
 const big = await callPath('/dsh-manuscript/api/search', { url: '/dsh-manuscript/api/search?q=插件&topK=999' })
 check('topK 超上限回 clamped:true 与实际 topK', big.body?.clamped === true && big.body?.topK === 50, `topK=${big.body?.topK} clamped=${big.body?.clamped}`)
+
+const retiredSearch = await callPath('/dsh-manuscript/api/search', { url: '/dsh-manuscript/api/search?q=双排针&topK=5' })
+const retiredIds = (retiredSearch.body?.retired || []).map((r) => r.id)
+check('退役条目以「旧记录」身份返回', retiredIds.includes('e-aaaa00000003'), 'retired=' + JSON.stringify(retiredIds))
 
 const trace = find('/dsh-manuscript/api/trace')
 check('注册了 /api/trace', !!find('/dsh-manuscript/api/trace'))
