@@ -30,6 +30,17 @@
  *      随后本地再跑一次 buildLibrary，让新入册的真结论把骨架退役。最后从
  *      library.json 现算骨架占比。
  *
+ * ## 2026-11-17 · Markdown 真相层 + 打灰
+ *
+ * live 库自 2026-11-12 起是 Markdown 真相层（`vol-XX/<chapter>/<id>.md`），
+ * `entries/*.json` 已移入 `legacy-json/`。本脚本据此分支：
+ *   · 统计 / 骨架判定 / 去重：读 MD 扫描结果（`readAllMarkdownEntries`），不再只看 entries/；
+ *   · 重扫：`rebuildMarkdownIndex`。**绝不调 buildLibrary** —— 那会按本机会话重新派生
+ *     T0 骨架并写 entries/*.json，把 MD 库降级回 JSON 模式（2026-11-17 实测过）；
+ *   · 重提炼成功：显式把同会话骨架标 `expired`（MD 模式没有 buildLibrary 的自动退役）；
+ *   · 模型判定无内容：标 `grayed`（打灰）。文件保留、可搜可读，只是移出目录/时间线等主视图；
+ *     语义与 `expired`（有真结论取代）严格分开，不冒充退役。
+ *
  * ## 幂等
  *
  *   · 入册口按内容指纹去重（commit.js），重复提交不会产生第二条；
@@ -92,6 +103,14 @@ import { adjudicate } from '../lib/adjudicate.js'
 import { commitEntries } from '../lib/commit.js'
 import { readState as readDistillStateFile, writeState as writeDistillStateFile } from '../lib/distill-state.js'
 import { isSkeletonClaim } from '../lib/skeleton.js'
+import {
+  isMarkdownLibrary,
+  readAllMarkdownEntries,
+  scanMarkdownLibrary,
+  rebuildMarkdownIndex,
+  findMarkdownEntryFile,
+  writeMarkdownEntryFile,
+} from '../lib/markdown-library.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = resolve(HERE, '..')
@@ -240,34 +259,59 @@ function catalogStats(library) {
   }
 }
 
-/** 磁盘全量交叉校验：current / expired 各多少，其中骨架多少。 */
-function diskStats(rootPath) {
+/**
+ * 统一读取全量条目：Markdown 真相当前，旧 JSON 库自动回退。
+ *
+ * 【为什么必须按库的存储模式分支】2026-11-12 起 live 库是 Markdown 真相层，
+ * `entries/*.json` 已被移入 `legacy-json/`。继续只读 entries/ 会得到 0 条 ——
+ * 脚本会"成功地"什么都没做，并把统计报成 0，这是最危险的失败形态。
+ */
+function readAllEntries(rootPath) {
+  if (isMarkdownLibrary(rootPath)) {
+    const r = readAllMarkdownEntries(rootPath)
+    return { entries: r.entries, errors: r.errors, storage: 'markdown' }
+  }
   const dir = join(rootPath, 'entries')
-  const all = []
-  const bad = []
+  const entries = []
+  const errors = []
   if (existsSync(dir)) {
     for (const f of readdirSync(dir)) {
       if (!f.endsWith('.json')) continue
       try {
         const e = JSON.parse(readFileSync(join(dir, f), 'utf8'))
-        if (e && e.id) all.push(e)
-        else bad.push(f)
-      } catch {
-        bad.push(f)
+        if (e && e.id) entries.push(e)
+        else errors.push({ file: f, message: '缺少 id' })
+      } catch (e) {
+        errors.push({ file: f, message: e?.message || String(e) })
       }
     }
   }
-  const current = all.filter((e) => e.status !== 'expired')
+  return { entries, errors, storage: 'json' }
+}
+
+/** 当前生效的索引对象。MD 模式以磁盘扫描为准，不信可能过期的 library.json。 */
+function readCurrentLibrary() {
+  if (isMarkdownLibrary(root)) return scanMarkdownLibrary(root).library
+  return readLibrary()
+}
+
+/** 磁盘全量交叉校验：current / expired / grayed 各多少，其中骨架多少。 */
+function diskStats(rootPath) {
+  const { entries: all, errors } = readAllEntries(rootPath)
+  const current = all.filter((e) => e.status !== 'expired' && e.status !== 'grayed')
   const expired = all.filter((e) => e.status === 'expired')
+  const grayed = all.filter((e) => e.status === 'grayed')
   const currentSkeletons = current.filter((e) => isSkeletonClaim(e.claim))
   return {
     total: all.length,
     current: current.length,
     expired: expired.length,
+    grayed: grayed.length,
     currentSkeletons: currentSkeletons.length,
     expiredSkeletons: expired.filter((e) => isSkeletonClaim(e.claim)).length,
+    grayedSkeletons: grayed.filter((e) => isSkeletonClaim(e.claim)).length,
     ratioCurrent: current.length ? currentSkeletons.length / current.length : null,
-    badFiles: bad,
+    badFiles: errors.map((e) => e.file),
   }
 }
 
@@ -293,27 +337,25 @@ function readDistillState() {
 
 /**
  * 当前「只有骨架、没有真结论」的会话。
- * 只读 entries/*.json，返回 Map<sid, { skeletonIds, distilledIds }>。
+ * 读全量条目（MD / 旧 JSON 自动分支），返回 Map<sid, { skeletonIds, distilledIds }>。
  */
 function skeletonSessions(rootPath) {
-  const dir = join(rootPath, 'entries')
   const bySid = new Map()
-  if (!existsSync(dir)) return bySid
-  for (const f of readdirSync(dir)) {
-    if (!f.endsWith('.json')) continue
-    let e
-    try {
-      e = JSON.parse(readFileSync(join(dir, f), 'utf8'))
-    } catch {
-      continue
-    }
+  for (const e of readAllEntries(rootPath).entries) {
     const sid = e?.provenance?.session_id
     if (!sid) continue
     const bucket = bySid.get(sid) || { skeletonIds: [], distilledIds: [] }
-    if (e.status !== 'expired' && isSkeletonClaim(e.claim)) bucket.skeletonIds.push(e.id)
-    // "真结论"的口径必须与 library.js 的自动退役一致：
-    // distilled === true、非骨架 claim、未退役。
-    if (e.distilled === true && e.status !== 'expired' && !isSkeletonClaim(e.claim)) {
+    // grayed 已经不在主视图里，不再是「待处理骨架」；反复重扫它只会重复烧钱。
+    if (e.status !== 'expired' && e.status !== 'grayed' && isSkeletonClaim(e.claim)) {
+      bucket.skeletonIds.push(e.id)
+    }
+    // "真结论"的口径必须与目录投影一致：distilled === true、非骨架 claim、未退役/未打灰。
+    if (
+      e.distilled === true &&
+      e.status !== 'expired' &&
+      e.status !== 'grayed' &&
+      !isSkeletonClaim(e.claim)
+    ) {
       bucket.distilledIds.push(e.id)
     }
     bySid.set(sid, bucket)
@@ -339,17 +381,9 @@ function attemptedSids(state) {
  */
 function distilledSessionsOnDisk(rootPath) {
   const set = new Set()
-  const dir = join(rootPath, 'entries')
-  if (!existsSync(dir)) return set
-  for (const f of readdirSync(dir)) {
-    if (!f.endsWith('.json')) continue
-    try {
-      const e = JSON.parse(readFileSync(join(dir, f), 'utf8'))
-      if (e?.distilled === true && e?.prebuilt !== true && e?.provenance?.session_id) {
-        set.add(e.provenance.session_id)
-      }
-    } catch {
-      /* 坏文件由 health 报，本脚本不处理 */
+  for (const e of readAllEntries(rootPath).entries) {
+    if (e?.distilled === true && e?.prebuilt !== true && e?.provenance?.session_id) {
+      set.add(e.provenance.session_id)
     }
   }
   return set
@@ -409,6 +443,15 @@ function getTriaged() {
 }
 
 async function localRebuild() {
+  // Markdown 真相层：**绝不**调 buildLibrary。
+  // buildLibrary 会按本机会话重新派生 T0 骨架并写 entries/*.json，把 MD 库
+  // 降级回 JSON 模式（library.json 失去 storage=markdown，宿主下次扫描会切走）。
+  // MD 模式的"重扫"就是重新扫描已落盘的条目并重建派生索引。
+  if (isMarkdownLibrary(root)) {
+    const r = rebuildMarkdownIndex(root)
+    if (!r.ok) throw new Error(`Markdown 索引重建失败：${r.error}`)
+    return { skeletonRetired: 0, library: r.library, root }
+  }
   const maxTries = 12
   let lastErr = null
   for (let i = 0; i < maxTries; i++) {
@@ -627,18 +670,9 @@ function makeDeepSeekLLM(apiKey) {
 
 /** 与 lib/index.js 的 readEntriesForDedup 同口径：排除退役/预加工/骨架/损坏。 */
 function readEntriesForDedupLocal() {
-  const dir = join(root, 'entries')
   const out = []
-  if (!existsSync(dir)) return out
-  for (const f of readdirSync(dir)) {
-    if (!f.endsWith('.json')) continue
-    let e
-    try {
-      e = JSON.parse(readFileSync(join(dir, f), 'utf8'))
-    } catch {
-      continue
-    }
-    if (!e || e.status === 'expired' || e.prebuilt === true) continue
+  for (const e of readAllEntries(root).entries) {
+    if (!e || e.status === 'expired' || e.status === 'grayed' || e.prebuilt === true) continue
     if (isSkeletonClaim(e.claim)) continue
     if (/\?{3,}/.test(`${e.title || ''} ${e.claim || ''}`)) continue
     out.push(e)
@@ -649,6 +683,67 @@ function readEntriesForDedupLocal() {
 function stateCount(state, key, sid) {
   const v = state?.[key]?.[sid]
   return Number.isFinite(v) ? v : 0
+}
+
+/** 改写一条已落盘条目的状态字段。MD 模式改写原文件（保留正文/溯源），JSON 模式改写条目文件。 */
+function persistEntryStatus(entry, patch) {
+  const nowIso = new Date().toISOString()
+  const next = { ...entry, ...patch, updatedAt: patch.updatedAt || nowIso }
+  if (isMarkdownLibrary(root)) {
+    const file = findMarkdownEntryFile(root, entry.id)
+    if (!file) return { ok: false, reason: `找不到条目文件：${entry.id}` }
+    writeMarkdownEntryFile(file, next)
+    return { ok: true, file }
+  }
+  const file = join(root, 'entries', `${entry.id}.json`)
+  writeFileSync(file, JSON.stringify(next, null, 2) + '\n', 'utf8')
+  return { ok: true, file }
+}
+
+/**
+ * 打灰：模型明确判定「这个会话没有可提炼的结论」。
+ *
+ * 【为什么是 grayed 而不是 expired】两者语义不同，不能混：
+ *   · expired  = 已有同会话的真结论取代了这条骨架（有内容，只是旧）；
+ *   · grayed   = 这个会话本身没有可提炼的结论（没内容）。
+ * 打灰后文件原样保留、可搜可读，只是从目录/时间线等主视图移除。
+ */
+function graySkeletonEntries(ids, reason) {
+  const byId = new Map(readAllEntries(root).entries.map((e) => [e.id, e]))
+  const grayed = []
+  for (const id of ids) {
+    const e = byId.get(id)
+    if (!e || e.status === 'grayed' || e.status === 'expired') continue
+    if (!isSkeletonClaim(e.claim)) continue // 红线：只打灰骨架，绝不碰真结论
+    const nowIso = new Date().toISOString()
+    const r = persistEntryStatus(e, {
+      status: 'grayed',
+      grayedAt: nowIso,
+      grayedReason: reason,
+    })
+    if (r.ok) grayed.push(id)
+  }
+  return grayed
+}
+
+/** 骨架被同会话的真结论取代：标 expired，留 replacedBy 便于溯源。 */
+function retireSkeletonEntries(ids, replacedBy) {
+  const byId = new Map(readAllEntries(root).entries.map((e) => [e.id, e]))
+  const retired = []
+  for (const id of ids) {
+    const e = byId.get(id)
+    if (!e || e.status === 'expired' || e.status === 'grayed') continue
+    if (!isSkeletonClaim(e.claim)) continue
+    const nowIso = new Date().toISOString()
+    const r = persistEntryStatus(e, {
+      status: 'expired',
+      retiredAt: nowIso,
+      retiredReason: 'superseded-by-distilled-entry',
+      ...(replacedBy ? { replacedBy } : {}),
+    })
+    if (r.ok) retired.push(id)
+  }
+  return retired
 }
 
 /**
@@ -752,6 +847,8 @@ async function runDeepSeekEngine(report, estimate) {
   let failed = 0
   let rejected = 0
   let written = 0
+  let grayedTotal = 0
+  let retiredTotal = 0
   let stopReason = null
 
   for (const s of targets) {
@@ -760,6 +857,7 @@ async function runDeepSeekEngine(report, estimate) {
       break
     }
     calls += 1
+    const skelIds = skelMap.get(s.sid)?.skeletonIds || []
     const label = `${s.sid.slice(0, 24)} ${(s.title || '').slice(0, 34)}`
     const t0 = Date.now()
     let r
@@ -791,8 +889,14 @@ async function runDeepSeekEngine(report, estimate) {
     if (!Array.isArray(r?.proposals) || r.proposals.length === 0) {
       empty += 1
       pendingState.emptySids[s.sid] = (pendingState.emptySids[s.sid] || 0) + 1
-      log(`  ○ ${label} · ${ms}ms · 模型认为无可提炼（骨架保留）`)
-      report.local.results.push({ sid: s.sid, title: s.title, outcome: 'empty', ms })
+      // 模型判定无内容 → 打灰：离开主视图、文件保留、可搜可读。
+      const grayedIds = graySkeletonEntries(skelIds, 'model-found-no-extractable-conclusion')
+      grayedTotal += grayedIds.length
+      log(
+        `  ○ ${label} · ${ms}ms · 模型认为无可提炼 → 打灰 ${grayedIds.length} 条` +
+          (grayedIds.length ? `（${grayedIds.join(', ')}）` : '')
+      )
+      report.local.results.push({ sid: s.sid, title: s.title, outcome: 'empty', ms, grayed: grayedIds })
       continue
     }
 
@@ -845,12 +949,17 @@ async function runDeepSeekEngine(report, estimate) {
     success += 1
     written += cr.written
     existing.push(...adj.accept)
+    // 入册成功后，同会话的骨架才算「被真结论取代」。MD 模式没有 buildLibrary
+    // 的自动退役派生规则，必须在这里显式改状态；否则骨架会一直留在目录里。
+    const retiredIds = retireSkeletonEntries(skelIds, cr.ids?.[0] || null)
+    retiredTotal += retiredIds.length
     delete pendingState.failedSids[s.sid]
     delete pendingState.emptySids[s.sid]
     delete pendingState.rejectedSids[s.sid]
     log(
       `  ✓ ${label} · ${ms}ms · 提案 ${r.proposals.length} → 入册 ${cr.written} 条` +
         (cr.skipped ? `（跳过 ${cr.skipped}）` : '') +
+        ` · 骨架退役 ${retiredIds.length} 条` +
         ` · 裁决 reject ${adj.reject.length}/human ${adj.human.length}`
     )
     report.local.results.push({
@@ -861,6 +970,7 @@ async function runDeepSeekEngine(report, estimate) {
       proposals: r.proposals.length,
       written: cr.written,
       skipped: cr.skipped,
+      retired: retiredIds,
       reject: adj.reject.length,
       human: adj.human.length,
     })
@@ -873,18 +983,31 @@ async function runDeepSeekEngine(report, estimate) {
     log(`  ⚠ 写 distill-state 失败（退避只在本次生效）：${e?.message || e}`)
   }
 
-  report.local.summary = { calls, success, empty, failed, rejected, written, stopReason }
+  report.local.summary = {
+    calls,
+    success,
+    empty,
+    failed,
+    rejected,
+    written,
+    grayed: grayedTotal,
+    skeletonRetired: retiredTotal,
+    stopReason,
+  }
   log('')
-  log('【本地引擎】提炼结束，建库重扫（应用骨架退役）…')
+  log('【本地引擎】提炼结束，重扫应用退役 / 打灰…')
   const rb = await localRebuild()
   report.afterRebuild = {
     skeletonRetired: rb.skeletonRetired ?? 0,
     retired: rb.library?.counts?.retired ?? null,
+    grayed: rb.library?.counts?.grayed ?? null,
     catalog: catalogStats(rb.library),
   }
   log(
-    `  新退役骨架 ${rb.skeletonRetired ?? 0} 条 · 目录 ${report.afterRebuild.catalog.total} 条 / ` +
-      `骨架 ${report.afterRebuild.catalog.skeletons}（${pct(report.afterRebuild.catalog.ratio)}）`
+    `  本轮骨架退役 ${retiredTotal} 条 · 打灰 ${grayedTotal} 条 · ` +
+      `目录 ${report.afterRebuild.catalog.total} 条 / 骨架 ${report.afterRebuild.catalog.skeletons}（${pct(
+        report.afterRebuild.catalog.ratio
+      )}）`
   )
   report.notes.push(stopReason || `本地引擎跑完 ${calls} 个会话`)
 }
@@ -915,7 +1038,7 @@ async function main() {
     notes: [],
   }
 
-  const beforeLib = readLibrary()
+  const beforeLib = readCurrentLibrary()
   report.before = { catalog: catalogStats(beforeLib), disk: diskStats(root) }
 
   log('═'.repeat(68))
@@ -923,14 +1046,15 @@ async function main() {
   log(`库根：${root}`)
   log(`宿主：${host}`)
   log('─'.repeat(68))
-  log('【前】目录可见条目 / 骨架：')
+  log(`${statsOnly ? '【当前】' : '【前】'}目录可见条目 / 骨架：`)
   log(
     `  ${report.before.catalog.total} 条 · 骨架 ${report.before.catalog.skeletons} 条 · ` +
       `占比 ${pct(report.before.catalog.ratio)}`
   )
   log(
-    `  磁盘：${report.before.disk.total} 文件 / current ${report.before.disk.current} / ` +
-      `expired ${report.before.disk.expired} · current 骨架 ${report.before.disk.currentSkeletons}`
+    `  磁盘：${report.before.disk.total} 条 / current ${report.before.disk.current} / ` +
+      `expired ${report.before.disk.expired} / grayed ${report.before.disk.grayed} · ` +
+      `current 骨架 ${report.before.disk.currentSkeletons}`
   )
   if (report.before.disk.badFiles.length) {
     log(`  ⚠ 读不出的条目文件 ${report.before.disk.badFiles.length} 个（health 会报，本脚本不处理）`)
@@ -1239,7 +1363,7 @@ async function main() {
  * host 引擎与 deepseek 引擎共用，避免两套数字口径漂移。
  */
 function finalizeReport(report, { estimate = null, attempted = null, usedRuns = [], stoppedReason = '' } = {}) {
-  const afterLib = readLibrary()
+  const afterLib = readCurrentLibrary()
   report.after = { catalog: catalogStats(afterLib), disk: diskStats(root) }
   const skelMapEnd = skeletonSessions(root)
   const remainingSkeletonSessions = [...skelMapEnd.values()].filter((b) => b.skeletonIds.length > 0).length
@@ -1293,6 +1417,9 @@ function finalizeReport(report, { estimate = null, attempted = null, usedRuns = 
     failedSessions,
     noContent,
     remainingSkeletonSessions,
+    grayed: report.after.disk.grayedSkeletons,
+    grayedSessions: report.after.disk.grayed,
+    expired: report.after.disk.expired,
     usage: report.usage,
     failedBatches: (report.batches || []).reduce((a, b) => a + (Array.isArray(b.failures) ? b.failures.length : 0), 0),
   }
@@ -1305,14 +1432,14 @@ function finalizeReport(report, { estimate = null, attempted = null, usedRuns = 
       `占比 ${pct(report.after.catalog.ratio)}（目标 < ${pct(threshold)}）→ ${report.summary.met ? '达标' : '未达标'}`
   )
   log(
-    `  磁盘：${report.after.disk.total} 文件 / current ${report.after.disk.current} / expired ${report.after.disk.expired} · ` +
-      `current 骨架 ${report.after.disk.currentSkeletons}`
+    `  磁盘：${report.after.disk.total} 条 / current ${report.after.disk.current} / expired ${report.after.disk.expired} / ` +
+      `grayed ${report.after.disk.grayed} · current 骨架 ${report.after.disk.currentSkeletons}`
   )
   log(
     `  提炼：${rounds} 轮 · 尝试 ${attemptedCount} 个会话 · 成功 ${success} · ` +
       `失败 ${failedSessions} · 无产出/未通过 ${noContent}`
   )
-  log(`  仍只有骨架的会话：${remainingSkeletonSessions}（失败的保留骨架不动）`)
+  log(`  仍只有骨架的会话：${remainingSkeletonSessions}（失败的保留骨架不动；打灰/退役的不计）`)
   if (stoppedReason) log(`  停止原因：${stoppedReason}`)
   for (const line of formatCost(report.usage, estimate)) log(`  ${line}`)
 

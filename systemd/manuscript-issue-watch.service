@@ -1,0 +1,13 @@
+[Unit]
+Description=书阁 GitHub issue 巡检（新 bug 单回「收到，跟进中」）
+
+[Service]
+# gh 的凭据在 GH_CONFIG_DIR 指向的目录里；systemd 不会继承交互 shell 的该变量。
+Environment=GH_CONFIG_DIR=/home/tank543/.dsh/state/superagent/gh-config
+Type=oneshot
+WorkingDirectory=/home/tank543/src/dsh-manuscript
+Environment=PATH=/home/tank543/.npm/_npx/1e7f6d9597241db0/node_modules/.bin:/usr/local/bin:/usr/bin:/bin:/usr/bin:/bin
+EnvironmentFile=/home/tank543/.dsh/state/superagent/issue-watch.env
+ExecStart=/home/tank543/DSH-系统工作区/定时工作/.tools/node24/bin/node /home/tank543/src/dsh-manuscript/scripts/watch-issues.mjs
+StandardOutput=append:/home/tank543/.dsh/logs/issue-watch.log
+StandardError=append:/home/tank543/.dsh/logs/issue-watch.log
