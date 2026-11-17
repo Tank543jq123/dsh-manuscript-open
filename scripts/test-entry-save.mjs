@@ -20,6 +20,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createRequire } from 'node:module'
 
 const TMP = mkdtempSync(join(tmpdir(), 'dsh-ms-save-'))
 const LIB_ROOT = join(TMP, 'library')
@@ -30,8 +31,58 @@ mkdirSync(LIB_ROOT, { recursive: true })
 process.env.DSH_MANUSCRIPT_ROOT = LIB_ROOT
 process.env.DSH_SESSIONS_ROOT = SESSIONS_ROOT
 process.env.DSH_WORKSPACE_JSON = join(TMP, 'no-such-workspace.json')
-// 让 defineTool 走宿主包解析（与 test-ui-endpoints 同一招），否则 library_save 注册不上。
-process.argv[1] = 'C:/Users/<user>/AppData/Local/OpenClaw/deps/portable-node/node_modules/@deepseek-ai/dsh/lib/bin.js'
+
+// 让 getDefineTool() 能解析到宿主：本机装了 @deepseek-ai/dsh 就用真的；
+// CI 是全新 runner，没有宿主包，也不能把一个写死的开发机路径当前提。
+// 解析不到时在临时目录搭一个最小宿主包（只实现 defineTool 的 schema 编译），
+// 让 library_save 以真实定义注册 —— 这样工具 description/execute 仍被覆盖，
+// 而不是把断言改成 `tool?.description` 容错（那会把产品契约测丢）。
+function resolveDshBin() {
+  if (process.env.DSH_BIN) return process.env.DSH_BIN
+  try {
+    return createRequire(import.meta.url).resolve('@deepseek-ai/dsh').replace(/index\.js$/, 'bin.js')
+  } catch {
+    return null
+  }
+}
+
+const DEFINE_TOOL_SHIM = `
+export function defineTool(options) {
+  const properties = {}
+  const required = []
+  for (const [key, spec] of Object.entries(options.parameters || {})) {
+    const { required: isRequired, ...rest } = spec || {}
+    properties[key] = rest
+    if (isRequired === true) required.push(key)
+  }
+  return {
+    name: options.name,
+    description: options.description,
+    parameters: { type: 'object', properties, ...(required.length ? { required } : {}) },
+    output: {
+      schema: (options.output && options.output.schema) || { type: 'string' },
+      render: (options.output && options.output.render) || (() => []),
+    },
+    async execute(args, exec) { return options.execute(args, exec) },
+  }
+}
+`
+
+function makeTestHost() {
+  const hostRoot = join(TMP, 'host', '@deepseek-ai', 'dsh')
+  const toolsRoot = join(hostRoot, 'node_modules', '@deepseek-ai', 'dsh-tools')
+  mkdirSync(join(hostRoot, 'lib'), { recursive: true })
+  mkdirSync(join(toolsRoot, 'lib'), { recursive: true })
+  writeFileSync(join(hostRoot, 'lib', 'bin.js'), '// 测试宿主占位：getDefineTool 只从路径推导，不执行这个文件\n')
+  writeFileSync(
+    join(toolsRoot, 'package.json'),
+    JSON.stringify({ name: '@deepseek-ai/dsh-tools', type: 'module', main: 'lib/index.js' })
+  )
+  writeFileSync(join(toolsRoot, 'lib', 'index.js'), DEFINE_TOOL_SHIM)
+  return join(hostRoot, 'lib', 'bin.js')
+}
+
+process.argv[1] = resolveDshBin() || makeTestHost()
 
 const { writeMarkdownEntry, scanMarkdownLibrary } = await import('../lib/markdown-library.js')
 const { apply } = await import('../lib/index.js')
@@ -164,8 +215,7 @@ console.log('\n── 0. 装配 ──')
 await apply(mockCtx)
 check('注册了 /api/timeline', routes.some((r) => r.path === '/dsh-manuscript/api/timeline'))
 check('注册了 /api/entry-save', routes.some((r) => r.path === '/dsh-manuscript/api/entry-save'))
-// 无宿主包时 defineTool 注册不上，tools 为空是环境结果，不是契约破坏（见第 7 节守卫）。
-check('注册了工具 library_save（有宿主时必查）', tools.length === 0 || tools.some((t) => t.name === 'library_save'))
+check('注册了工具 library_save', tools.some((t) => t.name === 'library_save'))
 
 // 等首次后台扫描完成
 let booted = false
@@ -388,12 +438,6 @@ console.log('\n── 6. /api/entry-save：保留未传字段 + 并发 ──')
 console.log('\n── 7. 工具 library_save ──')
 {
   const tool = tools.find((t) => t.name === 'library_save')
-  // 2026-11-16：library_save 靠宿主包 defineTool 注册。CI runner 上没有
-  // @deepseek-ai/dsh，注册不上、工具找不到 —— 这是环境缺失，不是契约坏了。
-  // 缺工具时跳过本节，别让 CI 因为「没装宿主」一直红。
-  if (!tool) {
-    console.log('   本机无宿主包（@deepseek-ai/dsh），library_save 未注册：跳过本节。')
-  } else {
   check('工具描述里有「只存明确结论」的提醒',
     /明确/.test(tool.description) && /整段对话|日志/.test(tool.description), tool.description.slice(0, 80))
   check('参数含 title/content/tags', ['title', 'content', 'tags'].every((k) => k in (tool.parameters?.properties || {})))
@@ -412,7 +456,6 @@ console.log('\n── 7. 工具 library_save ──')
 
   check('空 title 不写库', String(await tool.execute({ title: '   ', content: '正文' })).startsWith('未保存'))
   check('空 content 不写库', String(await tool.execute({ title: '标题', content: '  ' })).startsWith('未保存'))
-  }
 }
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败 / 共 ${pass + fail}`)

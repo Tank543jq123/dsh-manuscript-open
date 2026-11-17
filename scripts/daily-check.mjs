@@ -264,7 +264,8 @@ async function push(text) {
     const j = await res.json().catch(() => null)
     if (!res.ok || !j) return { ok: false, error: `HTTP ${res.status}` }
     if (j.sent === false) return { ok: false, error: j.error || 'bridge sent=false' }
-    return { ok: true, messageId: j.messageId ?? null }
+    if (j.messageId == null) return { ok: false, error: '桥返回 sent 但无 messageId（视为未投递）' }
+    return { ok: true, messageId: j.messageId }
   } catch (e) {
     return { ok: false, error: String(e.message || e).slice(0, 160) }
   }

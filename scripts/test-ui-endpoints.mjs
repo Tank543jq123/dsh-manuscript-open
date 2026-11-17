@@ -18,7 +18,7 @@
  * 会话根指向空目录：buildLibrary 靠 entries/ 做幂等合并，不扫会话也能保留全部条目。
  */
 
-import { mkdtempSync, mkdirSync, cpSync, rmSync, existsSync, readFileSync, writeFileSync, chmodSync, readdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, cpSync, rmSync, existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
@@ -29,17 +29,22 @@ const LIB_ROOT = join(TMP, 'library')
 const SESSIONS_ROOT = join(TMP, 'sessions')
 
 mkdirSync(SESSIONS_ROOT, { recursive: true })
-// 2026-11-16：验收流程（scripts/acceptance.mjs）会用夹具库把 DSH_MANUSCRIPT_ROOT
-// 指到临时库上。已经指定时直接用，不再复制本机真实库 —— 否则验收会悄悄变成
-// 「拿用户的库跑一遍」，既不可复现，也把真实数据卷进测试。
-const EXTERNAL_ROOT = process.env.DSH_MANUSCRIPT_ROOT && existsSync(process.env.DSH_MANUSCRIPT_ROOT)
-  ? process.env.DSH_MANUSCRIPT_ROOT
-  : null
-if (EXTERNAL_ROOT) {
-  // 夹具库：只读使用，不做写入（巡检设置文件放在临时副本里）
-  cpSync(EXTERNAL_ROOT, LIB_ROOT, { recursive: true })
-} else if (existsSync(REAL_ROOT)) cpSync(REAL_ROOT, LIB_ROOT, { recursive: true })
-else mkdirSync(LIB_ROOT, { recursive: true })
+// 本机全量跑时的断言总数（含 time 参数化那一组的多次执行）。
+// 无真语料时整份跳过，要如实记为「跳过 N」并计入 test-all 的统计，
+// 而不是 exit 0 了事 —— 后者会被当成「跑了但没结果」判红。
+// 新增/删除用例时同步这里；本地跑完会核对一次，过期不会被静默放过。
+const PLANNED_CHECKS = 61
+
+// 2026-11-16：CI 上没有真实语料，排序/正文类断言必然失败。
+// 无真语料时显式跳过全部用例（本地有语料时照旧全跑），不判红、也不伪装成通过。
+if (!existsSync(REAL_ROOT)) {
+  console.log(`↷ skipped ${PLANNED_CHECKS}：本机没有真实语料（${REAL_ROOT}），跳过依赖真语料的 UI 端点用例`)
+  console.log(`\n结果：0 通过 / 0 失败 / ${PLANNED_CHECKS} 跳过 / 共 ${PLANNED_CHECKS}`)
+  rmSync(TMP, { recursive: true, force: true })
+  process.exit(0)
+}
+cpSync(REAL_ROOT, LIB_ROOT, { recursive: true })
+
 
 // 巡检设置从"文件不存在"开始测：真实库副本里可能已经有用户设置，
 // 带着它跑会让默认值断言随用户当前配置漂移（假红/假绿都难查）。
@@ -152,20 +157,6 @@ if (!ok) {
   process.exit(1)
 }
 
-// 2026-11-16：CI 的 runner 上没有 ~/.dsh/dsh-manuscript，副本是空库。
-// 这份测试的价值全在真实语料上的排序与正文读取，空库上断言「插件必有命中」
-// 只会得到一条与环境无关的红 —— 那是在测机器，不是在测代码。
-// 所以空库时明确跳过并给 0 失败，让 CI 信号保持干净；本机验收照旧全跑。
-const summary = await call('/dsh-manuscript/api/summary')
-const ENTRY_COUNT = Number(summary.body?.entries ?? 0)
-if (!(ENTRY_COUNT > 0)) {
-  console.log(`\n本机无语料（entries=${ENTRY_COUNT}）：跳过真实语料用例，按通过计。`)
-  console.log('\n' + '='.repeat(60))
-  console.log(`结果：${pass} 通过 / ${fail} 失败 / 共 ${pass + fail}`)
-  rmSync(TMP, { recursive: true, force: true })
-  process.exit(0)
-}
-
 console.log('\n── 1. /api/search ──')
 {
   const r = await call('/dsh-manuscript/api/search', { url: '/dsh-manuscript/api/search?q=' + encodeURIComponent('插件') + '&topK=5' })
@@ -208,28 +199,11 @@ check('取得一个真实条目 id 用于详情测试', !!sampleId, String(sampl
   console.log('   样例：', JSON.stringify({ id: e.id, title: e.title, body: String(e.body || '').slice(0, 120), bodyIsClaim: e.bodyIsClaim, volumeName: e.volumeName, chapter: e.chapter }, null, 1))
 
   // 已提炼的条目必须能拿到 why（正文），而不是只有 claim。
-  // 2026-11-16：原来这里硬编码了真实库里的 e-b905855e6d7b，换成夹具库后该 id 不存在，
-  // 两条断言必然红 —— 那是在测「这台机器上恰好有那条」，不是测代码。改成从当前库
-  // 里挑一个真正有 why 的条目；库里一个都没有（夹具库）就明确跳过。
-  const entriesDir = join(LIB_ROOT, 'entries')
-  const refinedId = (() => {
-    try {
-      for (const name of readdirSync(entriesDir)) {
-        if (!name.endsWith('.json')) continue
-        const obj = JSON.parse(readFileSync(join(entriesDir, name), 'utf8'))
-        if (obj.why && String(obj.why).trim()) return obj.id
-      }
-    } catch {}
-    return null
-  })()
-  if (!refinedId) {
-    console.log('   本库没有带 why 的已提炼条目：跳过「正文来自 why」两条。')
-  } else {
-    const deep = await call('/dsh-manuscript/api/entry', { url: '/dsh-manuscript/api/entry?id=' + encodeURIComponent(refinedId) })
-    check('已提炼条目 → 200 且 bodyIsClaim=false', deep.status === 200 && deep.body?.entry?.bodyIsClaim === false, `id=${refinedId} status=${deep.status} bodyIsClaim=${deep.body?.entry?.bodyIsClaim}`)
-    check('正文来自 why（与 claim 不同）', !!deep.body?.entry?.body && deep.body.entry.body !== deep.body.entry.claim)
-    console.log('   正文样例：', String(deep.body?.entry?.body || '').slice(0, 120))
-  }
+  // e-b905855e6d7b 是真实库里的已提炼条目（write 先读后写那条），正文与摘要不同。
+  const deep = await call('/dsh-manuscript/api/entry', { url: '/dsh-manuscript/api/entry?id=e-b905855e6d7b' })
+  check('已提炼条目 → 200 且 bodyIsClaim=false', deep.status === 200 && deep.body?.entry?.bodyIsClaim === false, `status=${deep.status} bodyIsClaim=${deep.body?.entry?.bodyIsClaim}`)
+  check('正文来自 why（与 claim 不同）', !!deep.body?.entry?.body && deep.body.entry.body !== deep.body.entry.claim)
+  console.log('   正文样例：', String(deep.body?.entry?.body || '').slice(0, 120))
 
   const noId = await call('/dsh-manuscript/api/entry')
   check('缺 id → 400', noId.status === 400, `status=${noId.status}`)
@@ -363,6 +337,13 @@ console.log('\n── 4. /api/check-run（立即运行）──')
   const failed = await call('/dsh-manuscript/api/check-run', { method: 'POST', headers: GUARD, body: '{}' })
   check('systemctl 失败 → 503（不是假成功）', failed.status === 503, `status=${failed.status}`)
   check('503 正文带真实原因', String(failed.body?.error || '').includes('not found'), String(failed.body?.error))
+}
+
+// 核对断言总数：PLANNED_CHECKS 过期会让 CI 的「跳过 N」说谎。
+if (pass + fail !== PLANNED_CHECKS) {
+  const executed = pass + fail
+  fail += 1
+  failures.push(`断言总数 ${executed} 与 PLANNED_CHECKS ${PLANNED_CHECKS} 不一致（请同步跳过统计的基数）`)
 }
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败 / 共 ${pass + fail}`)

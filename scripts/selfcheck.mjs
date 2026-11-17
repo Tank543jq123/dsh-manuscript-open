@@ -21,7 +21,15 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 
 const results = []
-function check(name, fn, { fatal = false } = {}) {
+let skipped = 0
+function check(name, fn, { fatal = false, corpus = true } = {}) {
+  // 0 会话（CI 全新 runner）时，依赖真实语料的检查显式记为跳过。
+  // 不是伪造 PASS，也不是把「没有语料」判成产品故障 —— 结果行里会计入跳过数。
+  if (corpus && corpusMissing) {
+    skipped += 1
+    results.push({ name, status: 'SKIP', ms: 0, detail: '本机没有真实语料（CI 全新 runner），跳过依赖真实会话库的检查' })
+    return
+  }
   const t0 = Date.now()
   try {
     const detail = fn()
@@ -39,6 +47,24 @@ function assert(cond, msg) {
 const DATA_DIR = fileURLToPath(new URL('../data', import.meta.url))
 
 const jsonMode = process.argv.includes('--json')
+
+/**
+ * 语料探测。
+ *
+ * 自检的 23 条检查里 22 条跑在真实会话库上；CI 的全新 runner 没有
+ * ~/.dsh/sessions，scanSessions() 会返回 0 个会话。那不是产品坏了，
+ * 也不该 fatal 崩掉（旧行为：第一条就抛「一个会话都没扫到」）——
+ * 把依赖语料的检查显式记为跳过，只跑不依赖语料的契约检查。
+ * 真正的扫描异常仍然 fatal，不吞。
+ */
+let scanned = null
+let scanError = null
+try {
+  scanned = scanSessions()
+} catch (e) {
+  scanError = e
+}
+const corpusMissing = !scanError && scanned !== null && scanned.sessions.length === 0
 
 /**
  * 语料规模基线。
@@ -59,27 +85,9 @@ const scaled = (per100) => Math.max(1, Math.round((per100 * (scanned?.sessions.l
 // ─────────────────────────────────────────────
 // 1. 扫描
 // ─────────────────────────────────────────────
-let scanned
-// 2026-11-16：CI runner 上没有 ~/.dsh/sessions，扫描必然 0 个会话。
-// 这份脚本是「本机真实数据验收」，空机器上失败等于在测环境而不是测代码，
-// 所以无会话时明确跳过（0 失败），本机有数据时照旧全跑。
-if (Number(process.env.SELFCHECK_MIN_SESSIONS || 0) === 0 && !process.env.SELFCHECK_ALLOW_EMPTY) {
-  let has = false
-  try {
-    const { readdirSync } = await import('node:fs')
-    const { join } = await import('node:path')
-    const { homedir } = await import('node:os')
-    has = readdirSync(join(homedir(), '.dsh', 'sessions')).length > 0
-  } catch { has = false }
-  if (!has) {
-    console.log('本机无 ~/.dsh/sessions（CI 环境）：跳过真实语料自检，按通过计。')
-    console.log('\n' + '='.repeat(60))
-    console.log('结果：0 通过 / 0 失败 / 共 0')
-    process.exit(0)
-  }
-}
 check('扫描会话（多帧 zstd + 无版本号兼容）', () => {
-  scanned = scanSessions()
+  if (scanError) throw scanError
+  assert(scanned, '扫描没有返回结果')
   assert(scanned.sessions.length > 0, '一个会话都没扫到（检查 ~/.dsh/sessions）')
   if (MIN_SESSIONS > 0) assert(scanned.sessions.length >= MIN_SESSIONS, `会话数低于要求: ${scanned.sessions.length} < ${MIN_SESSIONS}`)
   const noVer = scanned.sessions.filter((s) => s.formatVersion === 0).length
@@ -344,7 +352,7 @@ check('package.json 契约', () => {
   assert(Array.isArray(pkg.dsh?.client?.inject), 'dsh.client.inject 应为数组')
   assert(pkg.engines?.dsh, '缺 engines.dsh 版本门')
   return `patch=${pkg.dsh.bundle.patch} · client.platform=${pkg.dsh.client.platform} · engines.dsh=${pkg.engines.dsh}`
-})
+}, { corpus: false })
 
 // ─────────────────────────────────────────────
 // 输出
@@ -357,20 +365,21 @@ try {
 
 const passed = results.filter((r) => r.status === 'PASS').length
 const failed = results.filter((r) => r.status === 'FAIL').length
+const skipCount = results.filter((r) => r.status === 'SKIP').length
 
 if (jsonMode) {
-  console.log(JSON.stringify({ passed, failed, results }, null, 2))
+  console.log(JSON.stringify({ passed, failed, skipped: skipCount, results }, null, 2))
 } else {
   console.log('')
   console.log('书阁 · 自检')
   console.log('═'.repeat(72))
   for (const r of results) {
-    const icon = r.status === 'PASS' ? '✓' : '✗'
+    const icon = r.status === 'PASS' ? '✓' : r.status === 'SKIP' ? '↷' : '✗'
     console.log(`${icon} ${r.name}`)
     console.log(`    ${r.detail}  ${r.ms}ms`)
   }
   console.log('═'.repeat(72))
-  console.log(`结果：${passed} 通过 / ${failed} 失败 / 共 ${results.length}`)
+  console.log(`结果：${passed} 通过 / ${failed} 失败 / ${skipCount} 跳过 / 共 ${results.length}`)
 }
 
 process.exit(failed > 0 ? 1 : 0)
