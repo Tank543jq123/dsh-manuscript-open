@@ -369,7 +369,13 @@ async function main() {
     console.error('写巡检摘要失败：' + (e && e.message))
   }
 
-  const pushed = NO_PUSH ? { ok: false, error: 'skipped' } : await push(message)
+  // 2026-11-19：用户要求「正常不发消息，只在失败/退化时推送」。
+  // 摘要仍写 LATEST_PATH 供早间提醒读取，只有红项才真正推微信。
+  const pushed = NO_PUSH
+    ? { ok: false, error: 'skipped' }
+    : red
+      ? await push(message)
+      : { ok: false, error: 'skipped: 巡检正常，按配置不推送' }
 
   const record = {
     time: at.toISOString(),
@@ -414,7 +420,7 @@ async function main() {
   // 退出码：1 = 手册退化；2 = 巡检本身绿、但微信没送达。
   // 后者必须也让 unit 变红 —— 否则推送桥挂了没人知道，等于告警静默失效。
   if (red) process.exitCode = 1
-  else if (!NO_PUSH && !DRY_RUN && !pushed.ok) process.exitCode = 2
+  else if (!NO_PUSH && !DRY_RUN && red && !pushed.ok) process.exitCode = 2
 }
 
 main().catch((e) => {

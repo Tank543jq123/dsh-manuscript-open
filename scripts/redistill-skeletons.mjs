@@ -70,7 +70,7 @@
  *   --no-commit          只提炼不入册（调试用；条目会写入日志，不会丢）
  *   --retry-attempted    允许重试 distill-state 里已记过失败/空产出的会话
  *   --allow-non-skeleton 允许队列里混入非骨架会话（默认拒绝，防止顺带烧钱）
- *   --engine <host|deepseek>  提炼引擎（默认 host；deepseek 直连官方 API）
+ *   --engine <host|deepseek>  提炼引擎（默认 deepseek：直连官方 API，避免宿主订阅到期导致的空文本）
  *   --api-base <url>      deepseek 引擎端点（默认 https://api.deepseek.com）
  *   --api-key-env <name>  key 的环境变量名（默认 DEEPSEEK_API_KEY）
  *   --api-model <id>      deepseek 引擎模型（默认 deepseek-flash）
@@ -135,7 +135,7 @@ const { values: argv } = parseArgs({
     'allow-non-skeleton': { type: 'boolean', default: false },
     'price-in-per-m': { type: 'string' },
     'price-out-per-m': { type: 'string' },
-    engine: { type: 'string', default: 'host' },
+    engine: { type: 'string', default: 'deepseek' },
     'api-base': { type: 'string' },
     'api-key-env': { type: 'string', default: 'DEEPSEEK_API_KEY' },
     'api-model': { type: 'string', default: 'deepseek-flash' },
@@ -175,7 +175,7 @@ const retryAttempted = argv['retry-attempted'] === true
 const allowNonSkeleton = argv['allow-non-skeleton'] === true
 const priceIn = numberOrNull(argv['price-in-per-m'])
 const priceOut = numberOrNull(argv['price-out-per-m'])
-const engine = String(argv.engine || 'host')
+const engine = String(argv.engine || 'deepseek')
 if (!['host', 'deepseek'].includes(engine)) {
   console.error(`✗ --engine 只支持 host | deepseek，收到 ${JSON.stringify(engine)}`)
   process.exit(2)

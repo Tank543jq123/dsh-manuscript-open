@@ -113,6 +113,9 @@ const fakeLlm = {
   },
 }
 
+// 本用例注入的是假 LLM（ctx.llm），必须走宿主引擎；生产默认已改成 deepseek 直连，
+// 这里显式指定，避免默认值变化让用例测到另一条路径。
+process.env.DSH_MANUSCRIPT_DISTILL_ENGINE = 'host'
 const { apply } = await import('../lib/index.js')
 
 const routes = []
