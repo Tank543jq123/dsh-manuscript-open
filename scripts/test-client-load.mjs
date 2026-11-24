@@ -151,12 +151,41 @@ try {
   const MainPanel = registered['main#manuscript'];
   ok('主面板已注册（key=manuscript）', typeof MainPanel === 'function');
 
-  // 四个 tab 一个都不能少（回归保护：本轮改动不许删既有功能）
+  // 五个 tab 一个都不能少（回归保护：本轮改动不许删既有功能）
   const mainTree = typeof MainPanel === 'function' ? MainPanel({}) : null;
   const mainText = allText(mainTree);
-  ok('四个 tab 齐全（书房/目录/AI 协作/工具架）',
-    ['书房', '目录', 'AI 协作', '工具架'].every((t) => mainText.includes(t)),
-    ['书房', '目录', 'AI 协作', '工具架'].filter((t) => !mainText.includes(t)).join(',') || 'all');
+  ok('五个 tab 齐全（书房/时间线/目录/AI 协作/工具架）',
+    ['书房', '时间线', '目录', 'AI 协作', '工具架'].every((t) => mainText.includes(t)),
+    ['书房', '时间线', '目录', 'AI 协作', '工具架'].filter((t) => !mainText.includes(t)).join(',') || 'all');
+
+  // ── v1.3.0 控制面板：六卡分区 / 排版刻度 / 统计口径 / 危险确认 ──────────
+  ok('书房六张 CardSection 齐全',
+    ['概览', '检索入口', '最近更新', '维护与巡检', '图书馆与路径', '工具与调试']
+      .every((t) => src.includes('title: "' + t + '"')),
+    ['概览', '检索入口', '最近更新', '维护与巡检', '图书馆与路径', '工具与调试']
+      .filter((t) => !src.includes('title: "' + t + '"')).join(',') || 'all');
+  ok('卡片标题走 16px 档', src.includes('--ms-fs-4:16px') && src.includes('.ms-cardsecTitle'));
+  ok('字号只剩 11/12/13/16 四档 + 22/24 展示档',
+    !/font-size:(9|9\.5|10|10\.5|11\.5|12\.5|13\.5|14\.5|15)px/.test(src));
+  ok('已整理读 summary.distilledSessions',
+    src.includes('summary && summary.distilledSessions'));
+  // 2026-11-24（整改 P0-1）：统计从 3 项扩成 4 项——「经验条目」拆成
+  // 「真结论」与「索引骨架」，避免把统计卡当成已记过的经验。
+  ok('统计四项用自解释文案',
+    ['label: "对话"', 'label: "已整理"', 'label: "真结论"', 'label: "索引骨架"'].every((t) => src.includes(t)));
+  // 2026-11-24（整改 P0-1 补）：骨架说明常驻，且必须回答"从哪来 / 是否 LLM / 怎么提炼 / 怎么隐藏"。
+  ok('索引骨架说明含来源/零 LLM/提炼/隐藏四要素',
+    ['ms-skelNote', '来自本地会话', '零 LLM 生成', '提炼与入库', '自动退役', '「索引」折叠']
+      .every((t) => src.includes(t)));
+  // 2026-11-24（整改 4.3-6 补）：判据只在宿主 skeleton.js 一份，客户端读标记。
+  ok('目录折叠只认宿主 skeleton 标记（未复制判据）',
+    src.includes('entry.skeleton === true') && !src.includes('function isSkeletonRow'));
+  ok('目录把骨架收进「索引（N）」折叠，默认不展开',
+    src.includes('索引（" + skeletonRows.length + "）') && src.includes('className: "ms-idx"') &&
+      src.includes('jsxs("details"') && !/ms-idx[\s\S]{0,300}open: true/.test(src));
+  ok('不再引用未定义的 --text-1', !src.includes('var(--text-1)'));
+  ok('丢弃有原位二次确认', src.includes('确认丢弃') && src.includes('丢弃后不会入册'));
+  ok('窄屏媒体查询在组件规则之后', src.lastIndexOf('@media (max-width:640px)') > src.indexOf('.ms-tsumLbl'));
   // D-05 顶栏：useJson 在测试环境里拿不到数据（summary.phase 不是 ready），
   // 所以这里断言"未就绪时不编造过期时间"—— 这正是要的诚实行为。
   ok('数据未就绪时不显示分钟前', !mainText.includes('分钟前'), mainText.slice(0, 80));

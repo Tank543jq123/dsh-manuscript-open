@@ -133,6 +133,26 @@ console.log('\n── 7. 目录渲染对畸形 summary 的容错 ──')
   // lite 形态要如实说明"只有计数、没有章明细"，而不是假装没有章
   const lite = renderCatalogSection({ summary: { ...base, volumes: [{ id: 'v', no: 'V', name: 'n', entries: 3, chapterCount: 2 }] } })
   check('lite 形态里说明"未包含章明细"', /未包含章明细/.test(lite.text), lite.text.split('\n').slice(-3).join(' | '))
+
+  // 2026-11-24（整改 P0-1）：骨架不是结论，L1 的**每册**标题行都要写清两个数。
+  // 0 必须照写（0 是确知）；只有 null（不知道）才省略。
+  const vol = (sk, cc) => ({
+    id: 'v', no: 'VOL.99', name: '样例册', entries: sk + cc, chapterCount: 1,
+    skeletonEntries: sk, conclusionEntries: cc,
+    chapters: [{ slug: 'c', title: '章', entries: Array.from({ length: sk + cc }, (_, i) => ({ title: 'e' + i })) }],
+  })
+  const two = renderCatalogSection({ summary: { ...base, entries: 5, volumes: [vol(2, 3)] } })
+  check('L1 每册标题行同时写「真结论 M」与「索引骨架 N」',
+    /真结论 3 条/.test(two.text) && /索引骨架 2 条（仅统计，不含结论）/.test(two.text),
+    two.text.split('\n').find((l) => l.startsWith('### ')) || '')
+  const zero = renderCatalogSection({ summary: { ...base, entries: 3, volumes: [vol(0, 3)] } })
+  check('L1 骨架数为 0 时也照样写出（不省略）',
+    /索引骨架 0 条（仅统计，不含结论）/.test(zero.text),
+    zero.text.split('\n').find((l) => l.startsWith('### ')) || '')
+  const unknown = renderCatalogSection({ summary: { ...base, entries: 3, volumes: [{ ...vol(0, 3), skeletonEntries: null, conclusionEntries: null }] } })
+  check('L1 取不到骨架计数时不编 0（整段省略）',
+    !/索引骨架/.test(unknown.text) && !/真结论 \d+ 条/.test(unknown.text),
+    unknown.text.split('\n').find((l) => l.startsWith('### ')) || '')
 }
 
 console.log('\n' + '═'.repeat(74))

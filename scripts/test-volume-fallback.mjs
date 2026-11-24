@@ -317,6 +317,38 @@ check('toSummary 也如实透出（面板不会再画满假进度）', () => {
   return `面板口径：可翻 ${s.catalogEntries} / 不可查 ${s.uncatalogedEntries} / 退役 ${s.retiredEntries}`
 })
 
+check('toSummary 逐册拆分「真结论 / 索引骨架」并下发 skeleton 标记', () => {
+  // 2026-11-24（整改 P0-1）：L1 目录要在**每册**标题行写骨架数，客户端折叠要认
+  // 宿主判据。两件事都依赖 toSummary 的投影，不能只在全库合计层面做。
+  const fake = {
+    counts: { entries: 2, retired: 0, grayed: 0 },
+    stages: { counts: { distilled: 1 } },
+    volumes: [{
+      id: 'vol-03', no: 'VOL.03', name: 'DSH 插件开发', desc: '',
+      chapters: 1, entries: 2, inbox: false, recent: null,
+      chapterList: [{
+        slug: 'ch-a', title: 'A',
+        entries: [
+          { id: 'e-sk', title: 'skel', claim: '2 轮 · 1 次工具调用 · 0 个交付物' },
+          { id: 'e-cc', title: 'concl', claim: '一句真结论' },
+        ],
+      }],
+    }],
+  }
+  const s = toSummary(fake)
+  assert(s.skeletonEntries === 1, `全库骨架应为 1，实际 ${s.skeletonEntries}`)
+  assert(s.conclusionEntries === 1, `全库真结论应为 1，实际 ${s.conclusionEntries}`)
+  const v = s.volumes[0]
+  assert(v.skeletonEntries === 1, `vol-03 骨架应为 1，实际 ${v.skeletonEntries}`)
+  assert(v.conclusionEntries === 1, `vol-03 真结论应为 1，实际 ${v.conclusionEntries}`)
+  const rows = v.chapters[0].entries
+  assert(rows[0].skeleton === true, '骨架条目没有下发 skeleton:true')
+  assert(rows[1].skeleton !== true, '真结论被误标成 skeleton')
+  // 投影只加派生标记，不回写源对象（真相层不能被 summary 污染）
+  assert(fake.volumes[0].chapterList[0].entries[0].skeleton === undefined, '源条目被改写了')
+  return '全库 1/1 · vol-03 1/1 · skeleton 标记只加在投影副本上'
+})
+
 check('兜底计数与明细进了 library.json（可 git 追溯，不只是日志）', () => {
   const lib = JSON.parse(readFileSync(join(root, 'library.json'), 'utf8'))
   assert(lib.counts.volumeFallback === 3, `counts.volumeFallback=${lib.counts.volumeFallback}`)

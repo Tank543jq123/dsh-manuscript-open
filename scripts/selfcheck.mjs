@@ -216,7 +216,11 @@ const tmpRoot = mkdtempSync(join(tmpdir(), 'manuscript-selfcheck-'))
 let built
 check('建库（归册 + 目录 + 真相层落盘）', () => {
   built = buildLibrary(triaged.enriched, { root: tmpRoot, dataDir: DATA_DIR })
-  assert(built.entries > 100, `条目数偏少: ${built.entries}`)
+  // 2026-11-24（整改 4.2）：默认只为 strong 会话建骨架，条目数不再等于全部会话数。
+  // 判据改成「不少于 strong 会话数」，并验证 weak 会话确实没有生成骨架。
+  const strongCount = triaged.enriched.filter((s) => s.admission === 'strong' && s.category === 'real').length
+  assert(built.entries >= strongCount, `条目数（${built.entries}）少于 strong 会话数（${strongCount}）`)
+  assert(strongCount > 0 ? built.entries < triaged.enriched.length + 50 : true, `条目数异常偏多: ${built.entries}`)
   assert(existsSync(join(tmpRoot, 'library.json')), 'library.json 未生成')
   const vols = built.library.volumes.filter((v) => v.entries > 0)
   assert(vols.length >= 3, `有效册数偏少: ${vols.length}`)

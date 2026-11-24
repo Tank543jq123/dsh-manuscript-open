@@ -16,7 +16,15 @@
  *   ④ 判据够窄，不误杀正文里提到「轮」的真实结论
  */
 
-import { matchEntries, isSkeletonEntry } from '../lib/index.js'
+import {
+  matchEntries,
+  isSkeletonEntry,
+  capSkeletons,
+  isSkeletonOnly,
+  applySkeletonCap,
+  skeletonCapNote,
+  formatRecallResponse,
+} from '../lib/index.js'
 
 let pass = 0
 let fail = 0
@@ -92,6 +100,103 @@ check('命中项带 id，可用 manual_trace 溯源', () => {
   const hits = matchEntries(snapshot, '微信直发 代理', 3)
   assert(hits.length > 0, '应有命中')
   assert(typeof hits[0].id === 'string' && hits[0].id.startsWith('e-'), '命中项缺 id：' + JSON.stringify(hits[0]))
+})
+
+// 2026-11-24（整改 4.3-7）：topK 骨架限流与 skeletonOnly 的纯函数行为。
+check('骨架限流：topK 里最多留 1 条骨架', () => {
+  const hits = [
+    { id: 'a', skeleton: true },
+    { id: 'b', skeleton: false },
+    { id: 'c', skeleton: true },
+    { id: 'd', skeleton: true },
+  ]
+  const out = capSkeletons(hits, 1)
+  const sk = out.filter((h) => h.skeleton).length
+  assert(sk === 1, '骨架数应为 1，实际 ' + sk)
+  // 4 条输入 = 3 骨架 + 1 结论 → 限流后 1 骨架 + 1 结论 = 2 条
+  assert(out.length === 2, '总条数应为 2，实际 ' + out.length)
+})
+check('骨架限流：真结论一条不删', () => {
+  const hits = [{ id: 'a', skeleton: false }, { id: 'b', skeleton: false }]
+  assert(capSkeletons(hits, 1).length === 2, '结论被误删')
+})
+check('仅骨架命中时 skeletonOnly 为真', () => {
+  assert(isSkeletonOnly([{ skeleton: true }]) === true, '全骨架应为 true')
+  assert(isSkeletonOnly([{ skeleton: true }, { skeleton: false }]) === false, '混合应为 false')
+  assert(isSkeletonOnly([]) === false, '空结果应为 false')
+})
+check('判据统一：claim 型骨架即使 confidence=high 也算骨架', () => {
+  assert(isSkeletonEntry({ claim: '9 轮 · 9 次工具调用 · 0 个交付物', confidence: 'high' }) === true, 'claim 型骨架未被识别')
+  assert(isSkeletonEntry({ claim: '双排针间距应 ≥2.54mm，否则波峰焊连锡', confidence: 'high' }) === false, '真结论被误判为骨架')
+})
+
+// 2026-11-24（整改 4.3-7 收尾）：manual_recall 工具面也必须限流。
+// HTTP 面此前已有 capSkeletons，但工具面直接把 searchEntries 的 8 条原样返回 ——
+// 实测真实库 q=只读 的 top8 里有 3 条灰度骨架，模型会当成 3 条经验。
+const skelHit = (id) => ({
+  id,
+  title: '骨架 ' + id,
+  claim: '1 轮 · 2 次工具调用 · 0 个交付物',
+  skeleton: true,
+  volumeName: 'VOL.03 DSH 插件开发',
+  chapterTitle: '提示词与技能',
+  confidence: 'speculation',
+  authority: 'L3',
+  score: 5,
+})
+const realHit = (id) => ({
+  id,
+  title: '真结论 ' + id,
+  claim: '这是一条有正文的经验。',
+  skeleton: false,
+  volumeName: 'VOL.03 DSH 插件开发',
+  chapterTitle: '提示词与技能',
+  confidence: 'high',
+  authority: 'L2',
+  score: 9,
+})
+
+check('applySkeletonCap：混合结果只留 1 条骨架，并给出丢弃数', () => {
+  const r = applySkeletonCap([realHit('r1'), skelHit('s1'), skelHit('s2'), realHit('r2')], 1)
+  assert(r.hits.filter((h) => h.skeleton).length === 1, '骨架数应为 1')
+  assert(r.hits.filter((h) => !h.skeleton).length === 2, '真结论被误删')
+  assert(r.droppedSkeletons === 1, '丢弃数应为 1，实际 ' + r.droppedSkeletons)
+  assert(r.skeletonOnly === false, '混合结果不该标 skeletonOnly')
+})
+
+check('applySkeletonCap：只有骨架时 skeletonOnly=true，丢弃数正确', () => {
+  const r = applySkeletonCap([skelHit('s1'), skelHit('s2'), skelHit('s3')], 1)
+  assert(r.hits.length === 1, '应只留 1 条')
+  assert(r.droppedSkeletons === 2, '丢弃数应为 2，实际 ' + r.droppedSkeletons)
+  assert(r.skeletonOnly === true, '应标 skeletonOnly')
+})
+
+check('骨架限流说明：仅骨架 → 仅索引、无结论；丢骨架 → 说明丢弃数', () => {
+  assert(skeletonCapNote({ skeletonOnly: true }) === '仅索引、无结论：命中的是会话统计骨架，不是提炼出的经验。')
+  const mixed = skeletonCapNote({ skeletonOnly: false, droppedSkeletons: 2 })
+  assert(mixed.includes('已丢弃 2 条索引骨架'), mixed)
+  assert(!mixed.includes('仅索引、无结论'), '混合结果不该说仅索引：' + mixed)
+  const only = skeletonCapNote({ skeletonOnly: true, droppedSkeletons: 2 })
+  assert(only.startsWith('仅索引、无结论'), only)
+  assert(only.includes('已丢弃 2 条'), only)
+})
+
+check('formatRecallResponse：真结论在前、骨架最多 1 条，并写明丢弃数', () => {
+  const text = formatRecallResponse([realHit('r1'), skelHit('s1'), realHit('r2'), skelHit('s2')])
+  assert(text.includes('已丢弃 1 条索引骨架'), text.split('\n')[0])
+  assert(text.includes('真结论 r1') && text.includes('真结论 r2'), '真结论不应被丢弃')
+  assert(text.indexOf('真结论 r1') < text.indexOf('骨架 s1'), '骨架应排在真结论之后')
+  assert(!text.includes('仅索引、无结论'), '有真结论时不该说仅索引')
+})
+
+check('formatRecallResponse：只有骨架时必须聚合标注「仅索引、无结论」', () => {
+  const text = formatRecallResponse([skelHit('s1'), skelHit('s2')])
+  assert(text.startsWith('仅索引、无结论'), '首行应是聚合标注：' + text.split('\n')[0])
+  assert(text.includes('已丢弃 1 条索引骨架'), '应说明丢弃数')
+})
+
+check('formatRecallResponse：空结果返回空串（调用方走 fail-closed 文案）', () => {
+  assert(formatRecallResponse([]) === '', '空结果应为空串')
 })
 
 console.log('\n' + '='.repeat(60))
