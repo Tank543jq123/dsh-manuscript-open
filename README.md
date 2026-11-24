@@ -21,6 +21,12 @@ flowchart LR
 
 ---
 
+## 界面（v1.3.0）
+
+![书房面板](docs/screenshots/panel-v130-shelf.png)
+
+![目录页每册口径](docs/screenshots/panel-v130-catalog.png)
+
 ## 它解决什么问题
 
 你和 AI 助手聊过几百次。里面有很多真东西：某个插件为什么装不上、某块板子的选型取舍、某次排查是怎么走通的。
